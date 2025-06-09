@@ -11,6 +11,7 @@ import 'dart:async'; // For debounce timer
 // Import our models and services
 import 'models/captured_content.dart';
 import 'services/content_service.dart';
+import 'views/history_view.dart';
 
 const String appTitle = 'Lazy macOS App';
 
@@ -97,6 +98,7 @@ Future<void> setupTray() async {
   Menu menu = Menu(
     items: [
       MenuItem(key: 'show_hide_window', label: 'Show/Hide Command Center'),
+      MenuItem(key: 'show_history', label: 'Show Capture History'),
       MenuItem.separator(),
       MenuItem(key: 'quit_app', label: 'Quit Lazy App'),
     ],
@@ -114,7 +116,13 @@ class MyApp extends StatefulWidget {
   State<MyApp> createState() => _MyAppState();
 }
 
+// Enum for app views
+enum AppView { commandCenter, history }
+
 class _MyAppState extends State<MyApp> with TrayListener {
+  // Current view
+  AppView _currentView = AppView.commandCenter;
+
   @override
   void initState() {
     super.initState();
@@ -130,6 +138,23 @@ class _MyAppState extends State<MyApp> with TrayListener {
     super.dispose();
   }
 
+  // Switch between views
+  void _switchToView(AppView view) {
+    setState(() {
+      _currentView = view;
+    });
+
+    // Adjust window size based on view
+    if (view == AppView.commandCenter) {
+      // Smaller size for command center
+      windowManager.setSize(const Size(600, 70));
+    } else if (view == AppView.history) {
+      // Larger size for history view
+      windowManager.setSize(const Size(800, 500));
+      windowManager.center();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return MacosApp(
@@ -138,7 +163,37 @@ class _MyAppState extends State<MyApp> with TrayListener {
       darkTheme: MacosThemeData.dark(),
       themeMode: ThemeMode.system,
       debugShowCheckedModeBanner: false,
-      home: CommandCenterView(key: commandCenterKey),
+      home: Builder(
+        builder: (context) {
+          switch (_currentView) {
+            case AppView.commandCenter:
+              return CommandCenterView(
+                key: commandCenterKey,
+                onShowHistory: () => _switchToView(AppView.history),
+              );
+            case AppView.history:
+              return MacosWindow(
+                child: Stack(
+                  children: [
+                    const HistoryView(),
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: MacosIconButton(
+                        icon: const Icon(
+                          CupertinoIcons.return_icon,
+                          color: MacosColors.systemBlueColor,
+                        ),
+                        onPressed: () => _switchToView(AppView.commandCenter),
+                        semanticLabel: 'Back to Command Center',
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }
+        },
+      ),
     );
   }
 
@@ -168,6 +223,12 @@ class _MyAppState extends State<MyApp> with TrayListener {
           commandCenterKey.currentState?._checkClipboard();
         }
         break;
+      case 'show_history':
+        // Switch to history view
+        _switchToView(AppView.history);
+        await windowManager.show();
+        await windowManager.focus();
+        break;
       case 'quit_app':
         await windowManager.destroy(); // Properly close and destroy the window
         await hotKeyManager.unregisterAll(); // Ensure hotkeys are cleaned up
@@ -177,7 +238,9 @@ class _MyAppState extends State<MyApp> with TrayListener {
 }
 
 class CommandCenterView extends StatefulWidget {
-  const CommandCenterView({super.key});
+  final VoidCallback onShowHistory;
+
+  const CommandCenterView({super.key, required this.onShowHistory});
 
   @override
   State<CommandCenterView> createState() => _CommandCenterViewState();
@@ -397,6 +460,18 @@ class _CommandCenterViewState extends State<CommandCenterView> {
                           Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
+                              MacosTooltip(
+                                message: 'History',
+                                child: MacosIconButton(
+                                  icon: const Icon(
+                                    CupertinoIcons.clock,
+                                    color: MacosColors.systemGrayColor,
+                                  ),
+                                  onPressed: widget.onShowHistory,
+                                  semanticLabel: 'Show History',
+                                ),
+                              ),
+                              const SizedBox(width: 4),
                               MacosTooltip(
                                 message: 'Clear (⌘⌫)',
                                 child: MacosIconButton(
