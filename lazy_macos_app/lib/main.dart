@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // Added for PhysicalKeyboardKey
 import 'package:macos_ui/macos_ui.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:hotkey_manager/hotkey_manager.dart';
@@ -9,8 +10,8 @@ const String appTitle = 'Lazy macOS App';
 
 // Define the hotkey
 final HotKey _hotKey = HotKey(
-  KeyCode.keyL,
-  modifiers: [KeyModifier.meta],
+  key: PhysicalKeyboardKey.keyL,
+  modifiers: [HotKeyModifier.meta],
   scope: HotKeyScope.system,
 );
 
@@ -34,13 +35,14 @@ void main() async {
     await windowManager.setAsFrameless();
     await windowManager.setResizable(false);
     // Start hidden, to be shown by hotkey or tray
-    // await windowManager.show(); 
+    // await windowManager.show();
     // await windowManager.focus();
     // For development, we might want to show it initially
-     if (Platform.isMacOS) { // Or some dev flag
-        await windowManager.show();
-        await windowManager.focus();
-     }
+    if (Platform.isMacOS) {
+      // Or some dev flag
+      await windowManager.show();
+      await windowManager.focus();
+    }
   });
 
   runApp(const MyApp());
@@ -66,10 +68,12 @@ Future<void> setupHotkeys() async {
 
 Future<void> setupTray() async {
   // TODO: Add a real icon path, ensure assets folder and pubspec.yaml are updated
-  String iconPath = Platform.isWindows ? 'assets/app_icon.ico' : 'assets/app_icon.png';
+  String iconPath = Platform.isWindows
+      ? 'assets/app_icon.ico'
+      : 'assets/app_icon.png';
   // For macOS, it's better to use a template image if possible.
   // If 'assets/app_icon.png' is a template image, set isTemplate to true.
-  // await trayManager.setIcon(iconPath, isTemplate: true); 
+  // await trayManager.setIcon(iconPath, isTemplate: true);
   // Using a placeholder for now or relying on default if any
   try {
     await trayManager.setIcon(iconPath);
@@ -77,18 +81,15 @@ Future<void> setupTray() async {
     print("Error setting tray icon: $e. Using default behavior if any.");
   }
 
-  List<MenuItem> items = [
-    MenuItem(
-      key: 'show_hide_window',
-      label: 'Show/Hide Command Center',
-    ),
-    MenuItem.separator(),
-    MenuItem(
-      key: 'quit_app',
-      label: 'Quit Lazy App',
-    ),
-  ];
-  await trayManager.setContextMenu(items);
+  Menu menu = Menu(
+    items: [
+      MenuItem(key: 'show_hide_window', label: 'Show/Hide Command Center'),
+      MenuItem.separator(),
+      MenuItem(key: 'quit_app', label: 'Quit Lazy App'),
+    ],
+  );
+  
+  await trayManager.setContextMenu(menu);
   // It's good practice to also set a tooltip
   await trayManager.setToolTip("Lazy macOS App");
 }
@@ -101,7 +102,6 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> with TrayListener {
-
   @override
   void initState() {
     super.initState();
@@ -113,7 +113,7 @@ class _MyAppState extends State<MyApp> with TrayListener {
     trayManager.removeListener(this);
     // It's good practice to unregister hotkeys if the app is truly closing,
     // though for a tray app, it might stay registered until quit from tray.
-    // hotKeyManager.unregister(_hotKey); 
+    // hotKeyManager.unregister(_hotKey);
     super.dispose();
   }
 
@@ -168,7 +168,8 @@ class CommandCenterView extends StatelessWidget {
   Widget build(BuildContext context) {
     return MacosWindow(
       child: MacosScaffold(
-        backgroundColor: MacosColors.transparent, // Example for a more overlay feel
+        backgroundColor:
+            MacosColors.transparent, // Example for a more overlay feel
         children: [
           ContentArea(
             builder: (context, scrollController) {
@@ -188,4 +189,3 @@ class CommandCenterView extends StatelessWidget {
     );
   }
 }
-
