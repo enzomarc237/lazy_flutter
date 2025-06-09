@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // Added for PhysicalKeyboardKey and Clipboard
 import 'package:macos_ui/macos_ui.dart';
@@ -5,6 +6,11 @@ import 'package:window_manager/window_manager.dart';
 import 'package:hotkey_manager/hotkey_manager.dart';
 import 'package:tray_manager/tray_manager.dart';
 import 'dart:io'; // Required for Platform.isMacOS
+import 'dart:async'; // For debounce timer
+
+// Import our models and services
+import 'models/captured_content.dart';
+import 'services/content_service.dart';
 
 const String appTitle = 'Lazy macOS App';
 
@@ -180,6 +186,13 @@ class CommandCenterView extends StatefulWidget {
 class _CommandCenterViewState extends State<CommandCenterView> {
   final TextEditingController _textController = TextEditingController();
   final FocusNode _focusNode = FocusNode();
+  final ContentService _contentService = ContentService();
+
+  // UI state
+  bool _isUrl = false;
+  bool _showFeedback = false;
+  String _feedbackMessage = '';
+  Timer? _feedbackTimer;
 
   @override
   void initState() {
@@ -190,13 +203,31 @@ class _CommandCenterViewState extends State<CommandCenterView> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _focusNode.requestFocus();
     });
+
+    // Listen for text changes to detect URLs
+    _textController.addListener(_onTextChanged);
   }
 
   @override
   void dispose() {
+    _textController.removeListener(_onTextChanged);
     _textController.dispose();
     _focusNode.dispose();
+    _feedbackTimer?.cancel();
     super.dispose();
+  }
+
+  // Detect URLs in text field
+  void _onTextChanged() {
+    final text = _textController.text.trim();
+    final newContent = CapturedContent.fromString(text);
+    final newIsUrl = newContent.type == ContentType.url;
+
+    if (newIsUrl != _isUrl) {
+      setState(() {
+        _isUrl = newIsUrl;
+      });
+    }
   }
 
   // Check clipboard for content and pre-fill text field
@@ -205,7 +236,10 @@ class _CommandCenterViewState extends State<CommandCenterView> {
       final ClipboardData? data = await Clipboard.getData(Clipboard.kTextPlain);
       if (data != null && data.text != null && data.text!.isNotEmpty) {
         setState(() {
-          _textController.text = data.text!;
+          final text = data.text!.trim();
+          _textController.text = text;
+          _isUrl = CapturedContent.fromString(text).type == ContentType.url;
+
           // Select all text so user can easily replace it if desired
           _textController.selection = TextSelection(
             baseOffset: 0,
@@ -218,20 +252,52 @@ class _CommandCenterViewState extends State<CommandCenterView> {
     }
   }
 
+  // Show feedback message briefly
+  void _showFeedbackMessage(String message, {bool isError = false}) {
+    setState(() {
+      _showFeedback = true;
+      _feedbackMessage = message;
+    });
+
+    // Hide feedback after a delay
+    _feedbackTimer?.cancel();
+    _feedbackTimer = Timer(const Duration(seconds: 2), () {
+      if (mounted) {
+        setState(() {
+          _showFeedback = false;
+        });
+      }
+    });
+  }
+
   // Handle content saving
   void _saveContent() async {
     final String content = _textController.text.trim();
     if (content.isEmpty) return;
 
-    // TODO: Implement full saving functionality in Phase 3
-    // For now, just log the content and hide the window
-    debugPrint('Saved content: $content');
+    // Create captured content
+    final capturedContent = CapturedContent.fromString(content);
 
-    // Clear the text field
-    _textController.clear();
+    // Save using service
+    final success = await _contentService.addContent(capturedContent);
 
-    // Hide the window after saving
-    await windowManager.hide();
+    if (success) {
+      // Show feedback based on content type
+      final contentType = capturedContent.type == ContentType.url
+          ? 'URL'
+          : 'Text';
+      _showFeedbackMessage('$contentType captured successfully!');
+
+      // Clear the text field
+      _textController.clear();
+
+      // Hide the window after a short delay
+      Timer(const Duration(milliseconds: 800), () async {
+        await windowManager.hide();
+      });
+    } else {
+      _showFeedbackMessage('Failed to save content', isError: true);
+    }
   }
 
   @override
@@ -244,14 +310,50 @@ class _CommandCenterViewState extends State<CommandCenterView> {
             builder: (context, scrollController) {
               return Container(
                 padding: const EdgeInsets.all(8.0),
-                child: Center(
-                  child: MacosTextField(
-                    controller: _textController,
-                    focusNode: _focusNode,
-                    placeholder: 'Capture anything...',
-                    autofocus: true,
-                    onSubmitted: (value) => _saveContent(),
-                  ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: MacosTextField(
+                            controller: _textController,
+                            focusNode: _focusNode,
+                            placeholder: 'Capture anything...',
+                            autofocus: true,
+                            onSubmitted: (value) => _saveContent(),
+                            prefix: _isUrl
+                                ? const Icon(
+                                    CupertinoIcons.link,
+                                    size: 16,
+                                    color: MacosColors.systemGrayColor,
+                                  )
+                                : const Icon(
+                                    CupertinoIcons.text_quote,
+                                    size: 16,
+                                    color: MacosColors.systemGrayColor,
+                                  ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        MacosIconButton(
+                          icon: const Icon(
+                            CupertinoIcons.check_mark_circled,
+                            color: MacosColors.systemBlueColor,
+                          ),
+                          onPressed: () => _saveContent(),
+                          semanticLabel: 'Save',
+                        ),
+                      ],
+                    ),
+                    if (_showFeedback) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        _feedbackMessage,
+                        style: MacosTheme.of(context).typography.caption2,
+                      ),
+                    ],
+                  ],
                 ),
               );
             },
