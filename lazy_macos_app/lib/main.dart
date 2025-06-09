@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // Added for PhysicalKeyboardKey
+import 'package:flutter/services.dart'; // Added for PhysicalKeyboardKey and Clipboard
 import 'package:macos_ui/macos_ui.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:hotkey_manager/hotkey_manager.dart';
@@ -48,6 +48,10 @@ void main() async {
   runApp(const MyApp());
 }
 
+// Global key to access CommandCenterView state
+final GlobalKey<_CommandCenterViewState> commandCenterKey =
+    GlobalKey<_CommandCenterViewState>();
+
 Future<void> setupHotkeys() async {
   await hotKeyManager.register(
     _hotKey,
@@ -61,6 +65,9 @@ Future<void> setupHotkeys() async {
       } else {
         await windowManager.show();
         await windowManager.focus();
+
+        // Refresh clipboard content when window appears
+        commandCenterKey.currentState?._checkClipboard();
       }
     },
   );
@@ -88,7 +95,7 @@ Future<void> setupTray() async {
       MenuItem(key: 'quit_app', label: 'Quit Lazy App'),
     ],
   );
-  
+
   await trayManager.setContextMenu(menu);
   // It's good practice to also set a tooltip
   await trayManager.setToolTip("Lazy macOS App");
@@ -125,7 +132,7 @@ class _MyAppState extends State<MyApp> with TrayListener {
       darkTheme: MacosThemeData.dark(),
       themeMode: ThemeMode.system,
       debugShowCheckedModeBanner: false,
-      home: const CommandCenterView(),
+      home: CommandCenterView(key: commandCenterKey),
     );
   }
 
@@ -150,35 +157,100 @@ class _MyAppState extends State<MyApp> with TrayListener {
         } else {
           await windowManager.show();
           await windowManager.focus();
+
+          // Refresh clipboard content when window appears
+          commandCenterKey.currentState?._checkClipboard();
         }
         break;
       case 'quit_app':
         await windowManager.destroy(); // Properly close and destroy the window
-        // hotKeyManager.unregisterAll(); // Ensure hotkeys are cleaned up
-        // exit(0); // Exit the application
-        break;
+        await hotKeyManager.unregisterAll(); // Ensure hotkeys are cleaned up
+        exit(0); // Exit the application
     }
   }
 }
 
-class CommandCenterView extends StatelessWidget {
+class CommandCenterView extends StatefulWidget {
   const CommandCenterView({super.key});
+
+  @override
+  State<CommandCenterView> createState() => _CommandCenterViewState();
+}
+
+class _CommandCenterViewState extends State<CommandCenterView> {
+  final TextEditingController _textController = TextEditingController();
+  final FocusNode _focusNode = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    // Check clipboard content when view is initialized
+    _checkClipboard();
+    // We need to use a post-frame callback to ensure the widget is fully rendered
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _focusNode.requestFocus();
+    });
+  }
+
+  @override
+  void dispose() {
+    _textController.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  // Check clipboard for content and pre-fill text field
+  Future<void> _checkClipboard() async {
+    try {
+      final ClipboardData? data = await Clipboard.getData(Clipboard.kTextPlain);
+      if (data != null && data.text != null && data.text!.isNotEmpty) {
+        setState(() {
+          _textController.text = data.text!;
+          // Select all text so user can easily replace it if desired
+          _textController.selection = TextSelection(
+            baseOffset: 0,
+            extentOffset: _textController.text.length,
+          );
+        });
+      }
+    } catch (e) {
+      debugPrint('Error reading clipboard: $e');
+    }
+  }
+
+  // Handle content saving
+  void _saveContent() async {
+    final String content = _textController.text.trim();
+    if (content.isEmpty) return;
+
+    // TODO: Implement full saving functionality in Phase 3
+    // For now, just log the content and hide the window
+    debugPrint('Saved content: $content');
+
+    // Clear the text field
+    _textController.clear();
+
+    // Hide the window after saving
+    await windowManager.hide();
+  }
 
   @override
   Widget build(BuildContext context) {
     return MacosWindow(
       child: MacosScaffold(
-        backgroundColor:
-            MacosColors.transparent, // Example for a more overlay feel
+        backgroundColor: MacosColors.transparent,
         children: [
           ContentArea(
             builder: (context, scrollController) {
               return Container(
                 padding: const EdgeInsets.all(8.0),
-                child: const Center(
+                child: Center(
                   child: MacosTextField(
+                    controller: _textController,
+                    focusNode: _focusNode,
                     placeholder: 'Capture anything...',
-                    // autofocus: true, // Consider managing focus carefully
+                    autofocus: true,
+                    onSubmitted: (value) => _saveContent(),
                   ),
                 ),
               );
