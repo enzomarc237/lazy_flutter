@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:macos_ui/macos_ui.dart';
+import 'package:contextual_menu/contextual_menu.dart';
 
 import '../models/captured_content.dart';
 import '../services/content_service.dart';
@@ -39,8 +40,8 @@ class _HistoryViewState extends State<HistoryView> {
         title: const Text('Copied to Clipboard'),
         message: const Text('Content has been copied to the clipboard.'),
         primaryButton: PushButton(
-          buttonSize: ButtonSize.large,
           onPressed: () => Navigator.pop(context),
+          controlSize: ControlSize.large,
           child: const Text('OK'),
         ),
       ),
@@ -56,7 +57,7 @@ class _HistoryViewState extends State<HistoryView> {
         title: const Text('Delete Item'),
         message: const Text('Are you sure you want to delete this item?'),
         primaryButton: PushButton(
-          buttonSize: ButtonSize.large,
+          controlSize: ControlSize.large,
           onPressed: () {
             Navigator.pop(context);
             // TODO: Implement actual deletion in ContentService
@@ -66,7 +67,7 @@ class _HistoryViewState extends State<HistoryView> {
           child: const Text('Delete'),
         ),
         secondaryButton: PushButton(
-          buttonSize: ButtonSize.large,
+          controlSize: ControlSize.large,
           onPressed: () => Navigator.pop(context),
           child: const Text('Cancel'),
         ),
@@ -115,52 +116,54 @@ class _HistoryViewState extends State<HistoryView> {
                     horizontal: 16.0,
                     vertical: 8.0,
                   ),
-                  child: MacosListTile(
-                    leading: Icon(
-                      isUrl ? CupertinoIcons.link : CupertinoIcons.text_quote,
-                      color: isUrl
-                          ? MacosColors.systemBlueColor
-                          : MacosColors.systemGrayColor,
-                    ),
-                    title: Text(
-                      item.content,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    subtitle: Text(
-                      'Captured on ${_formatDate(item.timestamp)}',
-                      style: MacosTheme.of(context).typography.caption2,
-                    ),
-                    onClick: () {
-                      // Show details in a dialog or open URL
-                      if (isUrl) {
-                        // TODO: Implement URL opening
-                        _copyToClipboard(item.content);
-                      } else {
-                        _showContentDetails(item);
-                      }
+                  child: GestureDetector(
+                    onSecondaryTapUp: (details) {
+                      Menu menu = Menu(
+                        items: [
+                          MenuItem(
+                            label: 'Copy to Clipboard',
+                            onClick: (_) {
+                              _copyToClipboard(item.content);
+                            },
+                          ),
+                          MenuItem(
+                            label: 'Delete',
+                            onClick: (_) {
+                              _deleteItem(index);
+                            },
+                          ),
+                        ],
+                      );
+                      popUpContextualMenu(
+                        menu,
+                        placement: Placement.bottomLeft,
+                      );
                     },
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        MacosTooltip(
-                          message: 'Copy to clipboard',
-                          child: MacosIconButton(
-                            icon: const MacosIcon(
-                              CupertinoIcons.doc_on_clipboard,
-                            ),
-                            onPressed: () => _copyToClipboard(item.content),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        MacosTooltip(
-                          message: 'Delete',
-                          child: MacosIconButton(
-                            icon: const MacosIcon(CupertinoIcons.trash),
-                            onPressed: () => _deleteItem(index),
-                          ),
-                        ),
-                      ],
+                    child: MacosListTile(
+                      leading: Icon(
+                        isUrl ? CupertinoIcons.link : CupertinoIcons.text_quote,
+                        color: isUrl
+                            ? MacosColors.systemBlueColor
+                            : MacosColors.systemGrayColor,
+                      ),
+                      title: Text(
+                        item.content,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      subtitle: Text(
+                        'Captured on ${_formatDate(item.timestamp)}',
+                        style: MacosTheme.of(context).typography.caption2,
+                      ),
+                      onClick: () {
+                        // Show details in a dialog or open URL
+                        if (isUrl) {
+                          // TODO: Implement URL opening
+                          _copyToClipboard(item.content);
+                        } else {
+                          _showContentDetails(item);
+                        }
+                      },
                     ),
                   ),
                 );
@@ -215,13 +218,13 @@ class _HistoryViewState extends State<HistoryView> {
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   PushButton(
-                    buttonSize: ButtonSize.large,
+                    controlSize: ControlSize.large,
                     onPressed: () => _copyToClipboard(item.content),
                     child: const Text('Copy to Clipboard'),
                   ),
                   const SizedBox(width: 8),
                   PushButton(
-                    buttonSize: ButtonSize.large,
+                    controlSize: ControlSize.large,
                     onPressed: () => Navigator.pop(context),
                     child: const Text('Close'),
                   ),

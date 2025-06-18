@@ -81,16 +81,14 @@ Future<void> setupHotkeys() async {
 }
 
 Future<void> setupTray() async {
-  // TODO: Add a real icon path, ensure assets folder and pubspec.yaml are updated
+  // Use the tray icon template image
   String iconPath = Platform.isWindows
-      ? 'assets/app_icon.ico'
-      : 'assets/app_icon.png';
-  // For macOS, it's better to use a template image if possible.
-  // If 'assets/app_icon.png' is a template image, set isTemplate to true.
-  // await trayManager.setIcon(iconPath, isTemplate: true);
-  // Using a placeholder for now or relying on default if any
+      ? 'assets/tray_icon_template.ico' // Would need Windows version
+      : 'assets/tray_icon_template.png';
+  
+  // For macOS, use template image for better system integration
   try {
-    await trayManager.setIcon(iconPath);
+    await trayManager.setIcon(iconPath, isTemplate: true);
   } catch (e) {
     print("Error setting tray icon: $e. Using default behavior if any.");
   }
