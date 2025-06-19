@@ -1,14 +1,18 @@
 enum ContentType { text, url }
 
 class CapturedContent {
+  final int? id;
   final String content;
   final ContentType type;
   final DateTime timestamp;
+  String? summary;
 
   CapturedContent({
+    this.id,
     required this.content,
     required this.type,
     DateTime? timestamp,
+    this.summary,
   }) : timestamp = timestamp ?? DateTime.now();
 
   // Factory method to create content from string
@@ -37,8 +41,10 @@ class CapturedContent {
   // Convert to map for storage
   Map<String, dynamic> toMap() {
     return {
+      'id': id,
       'content': content,
-      'type': type.toString(),
+      'type': type.toString().split('.').last,
+      'summary': summary,
       'timestamp': timestamp.toIso8601String(),
     };
   }
@@ -46,10 +52,12 @@ class CapturedContent {
   // Create from map
   factory CapturedContent.fromMap(Map<String, dynamic> map) {
     return CapturedContent(
+      id: map['id'],
       content: map['content'],
-      type: map['type'] == ContentType.url.toString()
+      type: map['type'] == 'url'
           ? ContentType.url
           : ContentType.text,
+      summary: map['summary'],
       timestamp: DateTime.parse(map['timestamp']),
     );
   }

@@ -136,8 +136,8 @@ class _HistoryViewState extends State<HistoryView> {
 
                 final items = snapshot.data!;
                 return ResizablePane(
-                  minWidth: 200,
-                  startWidth: 300,
+                  minSize: 200,
+                  startSize: 300,
                   windowBreakpoint: 600,
                   resizableSide: ResizableSide.right,
                   builder: (context, scrollController) {
@@ -159,7 +159,7 @@ class _HistoryViewState extends State<HistoryView> {
                               _selectedIndex = index;
                             });
                           },
-                          selected: _selectedIndex == index,
+                          backgroundColor: _selectedIndex == index ? MacosColors.systemGrayColor.withOpacity(0.2) : Colors.transparent,
                         );
                       },
                     );
