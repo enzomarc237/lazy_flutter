@@ -5,6 +5,7 @@ import 'package:macos_ui/macos_ui.dart';
 import 'package:contextual_menu/contextual_menu.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../services/gemini_service.dart';
 import '../models/captured_content.dart';
 import '../services/content_service.dart';
 
@@ -26,6 +27,22 @@ class _HistoryViewState extends State<HistoryView> {
   void initState() {
     super.initState();
     _loadCapturedItems();
+  }
+  final GeminiService _geminiService = GeminiService();
+
+  Future<String> _getSummary(CapturedContent item) async {
+    if (item.summary != null && item.summary!.isNotEmpty) {
+      return item.summary!;
+    }
+    return 'No summary available.';
+  }
+
+  Future<void> _generateSummary(CapturedContent item) async {
+    final summary = await _geminiService.summarize(item.content);
+    if (item.id != null) {
+      await _contentService.updateCaptureSummary(item.id!, summary);
+      _loadCapturedItems(); // Refresh the list
+    }
   }
 
   void _loadCapturedItems() {
@@ -199,15 +216,23 @@ class _HistoryViewState extends State<HistoryView> {
                   const SizedBox(height: 20),
                   const Divider(),
                   const SizedBox(height: 20),
-                  Text('Summary will appear here.', style: MacosTheme.of(context).typography.caption1),
-                  // Placeholder for AI summary button
+                  FutureBuilder<String>(
+                    future: _getSummary(item),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const ProgressCircle();
+                      } else if (snapshot.hasError) {
+                        return Text('Error: ${snapshot.error}');
+                      } else {
+                        return Text(snapshot.data ?? 'No summary available.');
+                      }
+                    },
+                  ),
                   const SizedBox(height: 10),
                   PushButton(
                     controlSize: ControlSize.large,
                     child: const Text('Generate Summary'),
-                    onPressed: () {
-                      // TODO: Implement Gemini summarization
-                    },
+                    onPressed: () => _generateSummary(item),
                   ),
                 ],
               ),
@@ -222,4 +247,3 @@ class _HistoryViewState extends State<HistoryView> {
     return '${date.day}/${date.month}/${date.year} ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
   }
 }
-

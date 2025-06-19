@@ -11,6 +11,8 @@ import 'dart:async'; // For debounce timer
 // Import our models and services
 import 'models/captured_content.dart';
 import 'services/content_service.dart';
+
+import 'views/settings_view.dart';
 import 'views/history_view.dart';
 
 const String appTitle = 'Lazy macOS App';
@@ -107,6 +109,7 @@ Future<void> setupTray() async {
     items: [
       MenuItem(key: 'show_hide_window', label: 'Show/Hide Command Center'),
       MenuItem(key: 'show_history', label: 'Show Capture History'),
+      MenuItem(key: 'show_settings', label: 'Settings'),
       MenuItem.separator(),
       MenuItem(key: 'quit_app', label: 'Quit Lazy App'),
     ],
@@ -125,7 +128,7 @@ class MyApp extends StatefulWidget {
 }
 
 // Enum for app views
-enum AppView { commandCenter, history }
+enum AppView { commandCenter, history, settings }
 
 class _MyAppState extends State<MyApp> with TrayListener {
   // Current view
@@ -161,6 +164,10 @@ class _MyAppState extends State<MyApp> with TrayListener {
       windowManager.setResizable(true);
       windowManager.setSize(const Size(1200, 700));
       windowManager.center();
+    } else if (view == AppView.settings) {
+      windowManager.setResizable(true);
+      windowManager.setSize(const Size(600, 400));
+      windowManager.center();
     }
   }
 
@@ -173,14 +180,23 @@ class _MyAppState extends State<MyApp> with TrayListener {
       darkTheme: MacosThemeData.dark(),
       themeMode: ThemeMode.system,
       debugShowCheckedModeBanner: false,
-      home: _currentView == AppView.commandCenter
-          ? CommandCenterView(
+      home: () {
+        switch (_currentView) {
+          case AppView.commandCenter:
+            return CommandCenterView(
               key: commandCenterKey,
               onShowHistory: () => _switchToView(AppView.history),
-            )
-          : HistoryView(
+            );
+          case AppView.history:
+            return HistoryView(
               onShowCommandCenter: () => _switchToView(AppView.commandCenter),
-            ),
+            );
+          case AppView.settings:
+            return SettingsView(
+              onShowCommandCenter: () => _switchToView(AppView.commandCenter),
+            );
+        }
+      }(),
     );
   }
 
@@ -203,23 +219,26 @@ class _MyAppState extends State<MyApp> with TrayListener {
         if (isVisible) {
           await windowManager.hide();
         } else {
+          _switchToView(AppView.commandCenter);
           await windowManager.show();
           await windowManager.focus();
-
-          // Refresh clipboard content when window appears
           commandCenterKey.currentState?._checkClipboard();
         }
         break;
       case 'show_history':
-        // Switch to history view
         _switchToView(AppView.history);
         await windowManager.show();
         await windowManager.focus();
         break;
+      case 'show_settings':
+        _switchToView(AppView.settings);
+        await windowManager.show();
+        await windowManager.focus();
+        break;
       case 'quit_app':
-        await windowManager.destroy(); // Properly close and destroy the window
-        await hotKeyManager.unregisterAll(); // Ensure hotkeys are cleaned up
-        exit(0); // Exit the application
+        await windowManager.destroy();
+        await hotKeyManager.unregisterAll();
+        exit(0);
     }
   }
 }
