@@ -3,12 +3,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:macos_ui/macos_ui.dart';
 import 'package:contextual_menu/contextual_menu.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../models/captured_content.dart';
 import '../services/content_service.dart';
 
 class HistoryView extends StatefulWidget {
-  const HistoryView({super.key});
+  final VoidCallback onShowCommandCenter;
+
+  const HistoryView({super.key, required this.onShowCommandCenter});
 
   @override
   State<HistoryView> createState() => _HistoryViewState();
@@ -16,7 +19,8 @@ class HistoryView extends StatefulWidget {
 
 class _HistoryViewState extends State<HistoryView> {
   final ContentService _contentService = ContentService();
-  List<CapturedContent> _capturedItems = [];
+  late Future<List<CapturedContent>> _capturedItemsFuture;
+  int? _selectedIndex;
 
   @override
   void initState() {
@@ -26,43 +30,33 @@ class _HistoryViewState extends State<HistoryView> {
 
   void _loadCapturedItems() {
     setState(() {
-      _capturedItems = _contentService.getAllContent();
+      _capturedItemsFuture = _contentService.getAllContent();
     });
   }
 
-  // Copy content to clipboard
   void _copyToClipboard(String content) {
     Clipboard.setData(ClipboardData(text: content));
-    showMacosAlertDialog(
-      context: context,
-      builder: (_) => MacosAlertDialog(
-        appIcon: const FlutterLogo(size: 56),
-        title: const Text('Copied to Clipboard'),
-        message: const Text('Content has been copied to the clipboard.'),
-        primaryButton: PushButton(
-          onPressed: () => Navigator.pop(context),
-          controlSize: ControlSize.large,
-          child: const Text('OK'),
-        ),
-      ),
-    );
+    // You might want a less intrusive feedback mechanism here
   }
 
-  // Delete a captured item
-  void _deleteItem(int index) {
+  void _deleteItem(CapturedContent item) {
     showMacosAlertDialog(
       context: context,
       builder: (_) => MacosAlertDialog(
         appIcon: const FlutterLogo(size: 56),
         title: const Text('Delete Item'),
-        message: const Text('Are you sure you want to delete this item?'),
+        message: const Text('Are you sure you want to delete this item? This action cannot be undone.'),
         primaryButton: PushButton(
           controlSize: ControlSize.large,
-          onPressed: () {
+          onPressed: () async {
             Navigator.pop(context);
-            // TODO: Implement actual deletion in ContentService
-            // For now, just reload the list
-            _loadCapturedItems();
+            if (item.id != null) {
+              await _contentService.deleteContent(item.id!);
+              _loadCapturedItems(); // Refresh the list
+              setState(() {
+                _selectedIndex = null; // Clear selection
+              });
+            }
           },
           child: const Text('Delete'),
         ),
@@ -75,12 +69,27 @@ class _HistoryViewState extends State<HistoryView> {
     );
   }
 
+  Future<void> _openUrl(String urlString) async {
+    final Uri? uri = Uri.tryParse(urlString);
+    if (uri != null && await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+    } else {
+      // Handle error
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return MacosScaffold(
       toolBar: ToolBar(
         title: const Text('Capture History'),
         actions: [
+          ToolBarIconButton(
+            label: 'Back to Command Center',
+            icon: const MacosIcon(CupertinoIcons.return_icon),
+            onPressed: widget.onShowCommandCenter,
+            showLabel: false,
+          ),
           ToolBarIconButton(
             label: 'Refresh',
             icon: const MacosIcon(CupertinoIcons.refresh),
@@ -92,80 +101,55 @@ class _HistoryViewState extends State<HistoryView> {
       children: [
         ContentArea(
           builder: (context, scrollController) {
-            if (_capturedItems.isEmpty) {
-              return const Center(
-                child: Text(
-                  'No captured items yet',
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: MacosColors.systemGrayColor,
-                  ),
-                ),
-              );
-            }
-
-            return ListView.builder(
-              controller: scrollController,
-              itemCount: _capturedItems.length,
-              itemBuilder: (context, index) {
-                final item = _capturedItems[index];
-                final isUrl = item.type == ContentType.url;
-
-                return Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16.0,
-                    vertical: 8.0,
-                  ),
-                  child: GestureDetector(
-                    onSecondaryTapUp: (details) {
-                      Menu menu = Menu(
-                        items: [
-                          MenuItem(
-                            label: 'Copy to Clipboard',
-                            onClick: (_) {
-                              _copyToClipboard(item.content);
-                            },
-                          ),
-                          MenuItem(
-                            label: 'Delete',
-                            onClick: (_) {
-                              _deleteItem(index);
-                            },
-                          ),
-                        ],
-                      );
-                      popUpContextualMenu(
-                        menu,
-                        placement: Placement.bottomLeft,
-                      );
-                    },
-                    child: MacosListTile(
-                      leading: Icon(
-                        isUrl ? CupertinoIcons.link : CupertinoIcons.text_quote,
-                        color: isUrl
-                            ? MacosColors.systemBlueColor
-                            : MacosColors.systemGrayColor,
-                      ),
-                      title: Text(
-                        item.content,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      subtitle: Text(
-                        'Captured on ${_formatDate(item.timestamp)}',
-                        style: MacosTheme.of(context).typography.caption2,
-                      ),
-                      onClick: () {
-                        // Show details in a dialog or open URL
-                        if (isUrl) {
-                          // TODO: Implement URL opening
-                          _copyToClipboard(item.content);
-                        } else {
-                          _showContentDetails(item);
-                        }
-                      },
+            return FutureBuilder<List<CapturedContent>>(
+              future: _capturedItemsFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: ProgressCircle());
+                } else if (snapshot.hasError) {
+                  return Center(child: Text('Error: ${snapshot.error}'));
+                } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                  return const Center(
+                    child: Text(
+                      'No captured items yet',
+                      style: TextStyle(fontSize: 16, color: MacosColors.systemGrayColor),
                     ),
-                  ),
+                  );
+                }
+
+                final items = snapshot.data!;
+                return ResizablePane(
+                  minWidth: 200,
+                  startWidth: 300,
+                  windowBreakpoint: 600,
+                  resizableSide: ResizableSide.right,
+                  builder: (context, scrollController) {
+                    return ListView.builder(
+                      controller: scrollController,
+                      itemCount: items.length,
+                      itemBuilder: (context, index) {
+                        final item = items[index];
+                        final isUrl = item.type == ContentType.url;
+                        return MacosListTile(
+                          leading: Icon(
+                            isUrl ? CupertinoIcons.link : CupertinoIcons.text_quote,
+                            color: isUrl ? MacosColors.systemBlueColor : MacosColors.systemGrayColor,
+                          ),
+                          title: Text(item.content, maxLines: 1, overflow: TextOverflow.ellipsis),
+                          subtitle: Text('Captured on ${_formatDate(item.timestamp)}', style: MacosTheme.of(context).typography.caption2),
+                          onClick: () {
+                            setState(() {
+                              _selectedIndex = index;
+                            });
+                          },
+                          selected: _selectedIndex == index,
+                        );
+                      },
+                    );
+                  },
+                  endPane: _selectedIndex == null
+                      ? const Center(child: Text('Select an item to see details'))
+                      : _buildDetailView(items[_selectedIndex!]),
                 );
               },
             );
@@ -175,65 +159,67 @@ class _HistoryViewState extends State<HistoryView> {
     );
   }
 
-  // Format date in a user-friendly way
-  String _formatDate(DateTime date) {
-    return '${date.day}/${date.month}/${date.year} ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
-  }
-
-  // Show full content details
-  void _showContentDetails(CapturedContent item) {
-    showMacosSheet(
-      context: context,
-      builder: (context) => MacosSheet(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Captured ${item.type == ContentType.url ? 'URL' : 'Text'}',
-                style: MacosTheme.of(context).typography.title3,
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Timestamp: ${_formatDate(item.timestamp)}',
-                style: MacosTheme.of(context).typography.body,
-              ),
-              const SizedBox(height: 16),
-              Container(
-                decoration: BoxDecoration(
-                  color: MacosColors.systemGrayColor.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                padding: const EdgeInsets.all(12),
-                width: double.infinity,
-                child: SelectableText(
-                  item.content,
-                  style: MacosTheme.of(context).typography.body,
-                ),
-              ),
-              const SizedBox(height: 24),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
+  Widget _buildDetailView(CapturedContent item) {
+    final isUrl = item.type == ContentType.url;
+    return MacosScaffold(
+      toolBar: ToolBar(
+        title: Text(isUrl ? 'URL Details' : 'Text Details'),
+        actions: [
+          ToolBarIconButton(
+            label: 'Copy',
+            icon: const MacosIcon(CupertinoIcons.doc_on_doc),
+            onPressed: () => _copyToClipboard(item.content),
+            showLabel: false,
+          ),
+          if (isUrl)
+            ToolBarIconButton(
+              label: 'Open URL',
+              icon: const MacosIcon(CupertinoIcons.globe),
+              onPressed: () => _openUrl(item.content),
+              showLabel: false,
+            ),
+          ToolBarIconButton(
+            label: 'Delete',
+            icon: const MacosIcon(CupertinoIcons.trash),
+            onPressed: () => _deleteItem(item),
+            showLabel: false,
+          ),
+        ],
+      ),
+      children: [
+        ContentArea(
+          builder: (context, scrollController) {
+            return SingleChildScrollView(
+              controller: scrollController,
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  SelectableText(item.content, style: MacosTheme.of(context).typography.body),
+                  const SizedBox(height: 20),
+                  const Divider(),
+                  const SizedBox(height: 20),
+                  Text('Summary will appear here.', style: MacosTheme.of(context).typography.caption1),
+                  // Placeholder for AI summary button
+                  const SizedBox(height: 10),
                   PushButton(
                     controlSize: ControlSize.large,
-                    onPressed: () => _copyToClipboard(item.content),
-                    child: const Text('Copy to Clipboard'),
-                  ),
-                  const SizedBox(width: 8),
-                  PushButton(
-                    controlSize: ControlSize.large,
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Close'),
+                    child: const Text('Generate Summary'),
+                    onPressed: () {
+                      // TODO: Implement Gemini summarization
+                    },
                   ),
                 ],
               ),
-            ],
-          ),
+            );
+          },
         ),
-      ),
+      ],
     );
   }
+
+  String _formatDate(DateTime date) {
+    return '${date.day}/${date.month}/${date.year} ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
+  }
 }
+

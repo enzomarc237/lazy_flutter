@@ -22,12 +22,22 @@ final HotKey _hotKey = HotKey(
   scope: HotKeyScope.system,
 );
 
+/// Configure macOS window utils for modern transparent effect
+Future<void> _configureMacosWindowUtils() async {
+  const config = MacosWindowUtilsConfig(
+    toolbarStyle: NSWindowToolbarStyle.unified,
+  );
+  await config.apply();
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await windowManager.ensureInitialized();
   await hotKeyManager.unregisterAll(); // Unregister all previous hotkeys
   await setupHotkeys();
   await setupTray();
+
+  await _configureMacosWindowUtils();
 
   WindowOptions windowOptions = const WindowOptions(
     size: Size(600, 70),
@@ -85,7 +95,7 @@ Future<void> setupTray() async {
   String iconPath = Platform.isWindows
       ? 'assets/tray_icon_template.ico' // Would need Windows version
       : 'assets/tray_icon_template.png';
-  
+
   // For macOS, use template image for better system integration
   try {
     await trayManager.setIcon(iconPath, isTemplate: true);
@@ -142,13 +152,14 @@ class _MyAppState extends State<MyApp> with TrayListener {
       _currentView = view;
     });
 
-    // Adjust window size based on view
+    // Adjust window size and properties based on view
     if (view == AppView.commandCenter) {
-      // Smaller size for command center
+      windowManager.setResizable(false);
       windowManager.setSize(const Size(600, 70));
+      windowManager.center();
     } else if (view == AppView.history) {
-      // Larger size for history view
-      windowManager.setSize(const Size(800, 500));
+      windowManager.setResizable(true);
+      windowManager.setSize(const Size(1200, 700));
       windowManager.center();
     }
   }
@@ -157,41 +168,19 @@ class _MyAppState extends State<MyApp> with TrayListener {
   Widget build(BuildContext context) {
     return MacosApp(
       title: appTitle,
+      color: MacosColors.transparent,
       theme: MacosThemeData.light(),
       darkTheme: MacosThemeData.dark(),
       themeMode: ThemeMode.system,
       debugShowCheckedModeBanner: false,
-      home: Builder(
-        builder: (context) {
-          switch (_currentView) {
-            case AppView.commandCenter:
-              return CommandCenterView(
-                key: commandCenterKey,
-                onShowHistory: () => _switchToView(AppView.history),
-              );
-            case AppView.history:
-              return MacosWindow(
-                child: Stack(
-                  children: [
-                    const HistoryView(),
-                    Positioned(
-                      top: 8,
-                      right: 8,
-                      child: MacosIconButton(
-                        icon: const Icon(
-                          CupertinoIcons.return_icon,
-                          color: MacosColors.systemBlueColor,
-                        ),
-                        onPressed: () => _switchToView(AppView.commandCenter),
-                        semanticLabel: 'Back to Command Center',
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }
-        },
-      ),
+      home: _currentView == AppView.commandCenter
+          ? CommandCenterView(
+              key: commandCenterKey,
+              onShowHistory: () => _switchToView(AppView.history),
+            )
+          : HistoryView(
+              onShowCommandCenter: () => _switchToView(AppView.commandCenter),
+            ),
     );
   }
 
@@ -394,6 +383,7 @@ class _CommandCenterViewState extends State<CommandCenterView> {
   @override
   Widget build(BuildContext context) {
     return MacosWindow(
+      backgroundColor: MacosColors.transparent,
       child: KeyboardListener(
         focusNode: FocusNode(),
         onKeyEvent: (keyEvent) {

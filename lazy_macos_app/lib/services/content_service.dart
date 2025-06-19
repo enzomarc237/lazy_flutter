@@ -1,38 +1,51 @@
 import 'dart:convert';
 import '../models/captured_content.dart';
+import 'database_helper.dart';
 
-// A service to manage captured content
-// This is a simple in-memory implementation for now
-// In Phase 3, this will be replaced with actual database storage
+// A service to manage captured content using SQLite
 class ContentService {
   // Singleton pattern
   static final ContentService _instance = ContentService._internal();
   factory ContentService() => _instance;
   ContentService._internal();
 
-  // In-memory storage - would be replaced with actual database in Phase 3
-  final List<CapturedContent> _capturedItems = [];
+  final DatabaseHelper _dbHelper = DatabaseHelper();
 
   // Add a new captured content
   Future<bool> addContent(CapturedContent content) async {
     try {
-      _capturedItems.add(content);
-      // In development, print to console
-      print('Content saved: ${jsonEncode(content.toMap())}');
+      await _dbHelper.insertCapture(content);
+      print('Content saved to database: ${jsonEncode(content.toMap())}');
       return true;
     } catch (e) {
-      print('Error saving content: $e');
+      print('Error saving content to database: $e');
       return false;
     }
   }
 
   // Get all captured content
-  List<CapturedContent> getAllContent() {
-    return List.unmodifiable(_capturedItems);
+  Future<List<CapturedContent>> getAllContent() async {
+    return await _dbHelper.getAllCaptures();
   }
 
   // Clear all content (for testing)
   Future<void> clearAll() async {
-    _capturedItems.clear();
+    await _dbHelper.clearAll();
+  }
+
+  // Get a single capture by ID
+  Future<CapturedContent?> getContentById(int id) async {
+    return await _dbHelper.getCaptureById(id);
+  }
+
+  // Delete a capture by ID
+  Future<bool> deleteContent(int id) async {
+    try {
+      await _dbHelper.deleteCapture(id);
+      return true;
+    } catch (e) {
+      print('Error deleting content: $e');
+      return false;
+    }
   }
 }
