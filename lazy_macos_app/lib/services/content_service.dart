@@ -47,6 +47,12 @@ class ContentService {
     return await _dbHelper.updateCaptureSummary(id, summary);
   }
 
+
+  // Update capture summary
+  Future<int> updateCaptureSummary(int id, String summary) async {
+    return await _dbHelper.updateCaptureSummary(id, summary);
+  }
+
       await _dbHelper.deleteCapture(id);
       return true;
     } catch (e) {
