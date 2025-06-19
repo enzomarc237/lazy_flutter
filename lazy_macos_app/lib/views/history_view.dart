@@ -135,44 +135,45 @@ class _HistoryViewState extends State<HistoryView> {
                 }
 
                 final items = snapshot.data!;
-                return MacosSplitView(
-                  sidebar: Sidebar(
-                    minWidth: 200,
-                    builder: (context, scrollController) {
-                      return ListView.builder(
-                        controller: scrollController,
-                        itemCount: items.length,
-                        itemBuilder: (context, index) {
-                          final item = items[index];
-                          final isUrl = item.type == ContentType.url;
-                          return GestureDetector(
-                            onTap: () {
-                              setState(() {
-                                _selectedIndex = index;
-                              });
-                            },
-                            child: Container(
-                              color: _selectedIndex == index
-                                  ? MacosColors.systemGrayColor.withOpacity(0.2)
-                                  : Colors.transparent,
-                              child: MacosListTile(
-                                leading: Icon(
-                                  isUrl ? CupertinoIcons.link : CupertinoIcons.text_quote,
-                                  color: isUrl
-                                      ? MacosColors.systemBlueColor
-                                      : MacosColors.systemGrayColor,
-                                ),
-                                title: Text(item.content, maxLines: 1, overflow: TextOverflow.ellipsis),
-                                subtitle: Text('Captured on ${_formatDate(item.timestamp)}',
-                                    style: MacosTheme.of(context).typography.caption2),
+                return ResizablePane(
+                  minSize: 200,
+                  startSize: 300,
+                  windowBreakpoint: 600,
+                  resizableSide: ResizableSide.right,
+                  builder: (context, scrollController) {
+                    return ListView.builder(
+                      controller: scrollController,
+                      itemCount: items.length,
+                      itemBuilder: (context, index) {
+                        final item = items[index];
+                        final isUrl = item.type == ContentType.url;
+                        return GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _selectedIndex = index;
+                            });
+                          },
+                          child: Container(
+                            color: _selectedIndex == index
+                                ? MacosColors.systemGrayColor.withOpacity(0.2)
+                                : Colors.transparent,
+                            child: MacosListTile(
+                              leading: Icon(
+                                isUrl ? CupertinoIcons.link : CupertinoIcons.text_quote,
+                                color: isUrl
+                                    ? MacosColors.systemBlueColor
+                                    : MacosColors.systemGrayColor,
                               ),
+                              title: Text(item.content, maxLines: 1, overflow: TextOverflow.ellipsis),
+                              subtitle: Text('Captured on ${_formatDate(item.timestamp)}',
+                                  style: MacosTheme.of(context).typography.caption2),
                             ),
-                          );
-                        },
-                      );
-                    },
-                  ),
-                  content: _selectedIndex == null
+                          ),
+                        );
+                      },
+                    );
+                  },
+                  endPane: _selectedIndex == null
                       ? const Center(child: Text('Select an item to see details'))
                       : _buildDetailView(items[_selectedIndex!]),
                 );
