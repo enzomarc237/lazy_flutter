@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'package:flutter/cupertino.dart';
+import 'package:flutter/cupertino.dart' hide OverlayVisibilityMode;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:macos_ui/macos_ui.dart';
@@ -51,11 +51,18 @@ class _CommandCenterViewState extends State<CommandCenterView> {
         title: 'Show History',
         icon: CupertinoIcons.clock,
         action: widget.onShowHistory,
+        badgeCount: 8,
       ),
       Command(
         title: 'Settings',
         icon: CupertinoIcons.settings,
         action: widget.onShowSettings,
+      ),
+      Command(
+        title: 'Notifications',
+        icon: CupertinoIcons.bell,
+        action: () {},
+        badgeCount: 4,
       ),
       Command(
         title: 'Clear',
@@ -196,14 +203,22 @@ class _CommandCenterViewState extends State<CommandCenterView> {
                   padding: const EdgeInsets.all(8.0),
                   decoration: BoxDecoration(
                     color: MacosTheme.of(context).brightness == Brightness.dark
-                        ? const Color.fromRGBO(40, 40, 40, 0.95)
-                        : const Color.fromRGBO(240, 240, 240, 0.95),
+                        ? const Color.fromRGBO(40, 40, 40, 0.5)
+                        : const Color.fromRGBO(255, 255, 255, 0.9),
                     borderRadius: BorderRadius.circular(12.0),
+                    border: Border.all(
+                      color:
+                          MacosTheme.of(context).brightness == Brightness.dark
+                          ? const Color.fromRGBO(100, 100, 100, 0.8)
+                          : const Color.fromRGBO(220, 220, 220, 0.8),
+                      width: 0.8,
+                    ),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.2),
-                        blurRadius: 20,
-                        offset: const Offset(0, 10),
+                        color: Colors.black.withOpacity(0.15),
+                        blurRadius: 30,
+                        spreadRadius: -5,
+                        offset: const Offset(0, 5),
                       ),
                     ],
                   ),
@@ -214,15 +229,23 @@ class _CommandCenterViewState extends State<CommandCenterView> {
                         controller: _textController,
                         focusNode: _focusNode,
                         placeholder: 'Type an action or navigate...',
+                        clearButtonMode: OverlayVisibilityMode.editing,
+                        focusedDecoration: BoxDecoration(
+                          border: Border.all(
+                            width: 0,
+                            color: Colors.transparent,
+                          ),
+                        ),
                         autofocus: true,
                         onSubmitted: (value) => _executeCommand(),
                         prefix: Icon(
                           _isUrl ? CupertinoIcons.link : CupertinoIcons.search,
                           size: 16,
-                          color: MacosColors.systemGrayColor,
+                          color: MacosTheme.of(context).primaryColor,
                         ),
                       ),
-                      const Divider(height: 16),
+                      const Divider(height: 16, color: Colors.white24),
+                      SizedBox(height: 8.0),
                       Expanded(
                         child:
                             (_textController.text.isNotEmpty &&
@@ -259,15 +282,23 @@ class _CommandCenterViewState extends State<CommandCenterView> {
                                     },
                                     child: Container(
                                       padding: const EdgeInsets.symmetric(
-                                        horizontal: 12,
-                                        vertical: 8,
+                                        horizontal: 16,
+                                        vertical: 10,
                                       ),
+                                      margin: const EdgeInsets.only(bottom: 4),
                                       decoration: BoxDecoration(
                                         color: _selectedIndex == index
                                             ? MacosColors.systemBlueColor
-                                                  .withOpacity(0.2)
+                                                  .withOpacity(0.15)
                                             : Colors.transparent,
-                                        borderRadius: BorderRadius.circular(6),
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: _selectedIndex == index
+                                            ? Border.all(
+                                                color:
+                                                    MacosColors.systemBlueColor,
+                                                width: 0.5,
+                                              )
+                                            : null,
                                       ),
                                       child: Row(
                                         children: [
@@ -283,6 +314,29 @@ class _CommandCenterViewState extends State<CommandCenterView> {
                                               context,
                                             ).typography.body,
                                           ),
+                                          const Spacer(),
+                                          if (command.badgeCount != null &&
+                                              command.badgeCount! > 0)
+                                            Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 8,
+                                                    vertical: 2,
+                                                  ),
+                                              decoration: BoxDecoration(
+                                                color:
+                                                    MacosColors.systemGrayColor,
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
+                                              ),
+                                              child: Text(
+                                                '${command.badgeCount}',
+                                                style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                            ),
                                         ],
                                       ),
                                     ),
@@ -290,16 +344,19 @@ class _CommandCenterViewState extends State<CommandCenterView> {
                                 },
                               ),
                       ),
-                      const Divider(height: 16),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          _buildHint('↑↓', 'to navigate'),
-                          const SizedBox(width: 16),
-                          _buildHint('⏎', 'to select'),
-                          const SizedBox(width: 16),
-                          _buildHint('esc', 'to close'),
-                        ],
+                      const Divider(height: 16, color: Colors.white24),
+                      Container(
+                        padding: EdgeInsets.symmetric(vertical: 10.0),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            _buildHint('↑↓', 'to navigate'),
+                            const SizedBox(width: 16),
+                            _buildHint('⏎', 'to select'),
+                            const SizedBox(width: 16),
+                            _buildHint('esc', 'to close'),
+                          ],
+                        ),
                       ),
                     ],
                   ),

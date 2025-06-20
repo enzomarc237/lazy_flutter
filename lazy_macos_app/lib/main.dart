@@ -43,7 +43,7 @@ void main() async {
   await _configureMacosWindowUtils();
 
   WindowOptions windowOptions = const WindowOptions(
-    size: Size(600, 450), // Default to command center size
+    size: Size(700, 450), // Default to command center size
     center: true,
     backgroundColor: Colors.transparent,
     skipTaskbar: true, // Hide from taskbar, rely on tray and hotkey
@@ -53,6 +53,9 @@ void main() async {
 
   windowManager.waitUntilReadyToShow(windowOptions, () async {
     await windowManager.setAsFrameless();
+    await windowManager.setVisibleOnAllWorkspaces(true);
+    await windowManager.setHasShadow(true);
+
     await windowManager.setResizable(false);
     if (Platform.isMacOS) {
       await windowManager.show();
@@ -72,24 +75,34 @@ Future<void> setupHotkeys() async {
   await hotKeyManager.register(
     _hotKey,
     keyDownHandler: (hotKey) async {
-      bool isVisible = await windowManager.isVisible();
-      if (isVisible) {
-        await windowManager.focus();
-      } else {
-        await windowManager.show();
-        await windowManager.focus();
-        // FIXME: Refreshing clipboard on show is temporarily disabled post-refactor.
-        // commandCenterKey.currentState?._checkClipboard();
-      }
+      await showHide();
     },
   );
+}
+
+Future showHide() async {
+  bool isVisible = await windowManager.isVisible();
+  bool isFocused = await windowManager.isFocused();
+
+  if (isVisible) {
+    if (isFocused) {
+      await windowManager.hide();
+    } else {
+      await windowManager.focus();
+    }
+  } else {
+    await windowManager.show();
+    await windowManager.focus();
+    // FIXME: Refreshing clipboard on show is temporarily disabled post-refactor.
+    // commandCenterKey.currentState?._checkClipboard();
+  }
 }
 
 Future<void> setupTray() async {
   String iconPath = 'assets/tray_icon_template.png';
 
   try {
-    await trayManager.setIcon(iconPath, isTemplate: true);
+    await trayManager.setIcon(iconPath);
   } catch (e) {
     print("Error setting tray icon: $e.");
   }
@@ -146,7 +159,7 @@ class _MyAppState extends State<MyApp> with TrayListener {
     // Adjust window size and properties based on view
     if (view == AppView.commandCenter) {
       windowManager.setResizable(false);
-      windowManager.setSize(const Size(600, 450));
+      windowManager.setSize(const Size(700, 450));
       windowManager.center();
     } else if (view == AppView.history) {
       windowManager.setResizable(true);
@@ -154,7 +167,7 @@ class _MyAppState extends State<MyApp> with TrayListener {
       windowManager.center();
     } else if (view == AppView.settings) {
       windowManager.setResizable(true);
-      windowManager.setSize(const Size(600, 400));
+      windowManager.setSize(const Size(700, 450));
       windowManager.center();
     }
   }
@@ -189,9 +202,9 @@ class _MyAppState extends State<MyApp> with TrayListener {
   }
 
   @override
-  void onTrayIconMouseDown() {
+  void onTrayIconMouseDown() async {
     // Show/Hide window or pop up context menu
-    trayManager.popUpContextMenu();
+    await showHide();
   }
 
   @override
@@ -203,16 +216,7 @@ class _MyAppState extends State<MyApp> with TrayListener {
   void onTrayMenuItemClick(MenuItem menuItem) async {
     switch (menuItem.key) {
       case 'show_hide_window':
-        bool isVisible = await windowManager.isVisible();
-        if (isVisible) {
-          await windowManager.hide();
-        } else {
-          _switchToView(AppView.commandCenter);
-          await windowManager.show();
-          await windowManager.focus();
-          // FIXME: Refreshing clipboard on show is temporarily disabled post-refactor.
-          // commandCenterKey.currentState?._checkClipboard();
-        }
+        await showHide();
         break;
       case 'show_history':
         _switchToView(AppView.history);

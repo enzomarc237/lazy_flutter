@@ -5,6 +5,12 @@ class Command {
   final String title;
   final IconData icon;
   final VoidCallback action;
+  final int? badgeCount; // Optional: for notification-style badges
 
-  Command({required this.title, required this.icon, required this.action});
+  Command({
+    required this.title,
+    required this.icon,
+    required this.action,
+    this.badgeCount,
+  });
 }
