@@ -262,6 +262,7 @@ class _CommandCenterViewState extends State<CommandCenterView> {
                                     const SizedBox(height: 8),
                                     Text(
                                       'No results for "${_textController.text}"',
+                                      textAlign: TextAlign.center,
                                       style: const TextStyle(
                                         color: MacosColors.systemGrayColor,
                                       ),

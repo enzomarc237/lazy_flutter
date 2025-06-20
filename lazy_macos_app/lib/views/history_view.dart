@@ -42,7 +42,7 @@ class _HistoryViewState extends State<HistoryView> {
     final summary = await _geminiService.summarize(item.content);
     if (item.id != null) {
       await _contentService.updateCaptureSummary(item.id!, summary);
-      _loadCapturedItems(); // Refresh the list
+      _loadCapturedItems();
     }
   }
 
@@ -54,7 +54,6 @@ class _HistoryViewState extends State<HistoryView> {
 
   void _copyToClipboard(String content) {
     Clipboard.setData(ClipboardData(text: content));
-    // You might want a less intrusive feedback mechanism here
   }
 
   void _deleteItem(CapturedContent item) {
@@ -63,19 +62,15 @@ class _HistoryViewState extends State<HistoryView> {
       builder: (_) => MacosAlertDialog(
         appIcon: const FlutterLogo(size: 56),
         title: const Text('Delete Item'),
-        message: const Text(
-          'Are you sure you want to delete this item? This action cannot be undone.',
-        ),
+        message: const Text('Are you sure you want to delete this item?'),
         primaryButton: PushButton(
           controlSize: ControlSize.large,
           onPressed: () async {
             Navigator.pop(context);
             if (item.id != null) {
               await _contentService.deleteContent(item.id!);
-              _loadCapturedItems(); // Refresh the list
-              setState(() {
-                _selectedIndex = null; // Clear selection
-              });
+              _loadCapturedItems();
+              setState(() => _selectedIndex = null);
             }
           },
           child: const Text('Delete'),
@@ -93,8 +88,6 @@ class _HistoryViewState extends State<HistoryView> {
     final Uri? uri = Uri.tryParse(urlString);
     if (uri != null && await canLaunchUrl(uri)) {
       await launchUrl(uri);
-    } else {
-      // Handle error
     }
   }
 
@@ -141,77 +134,107 @@ class _HistoryViewState extends State<HistoryView> {
                 }
 
                 final items = snapshot.data!;
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 24.0),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        flex: 2,
-                        child: ListView.builder(
-                          controller: scrollController,
-                          itemCount: items.length,
-                          itemBuilder: (context, index) {
-                            final item = items[index];
-                            final isUrl = item.type == ContentType.url;
-                            return GestureDetector(
-                              onTap: () {
-                                setState(() {
-                                  _selectedIndex = index;
-                                });
-                              },
-                              child: Container(
-                                padding: EdgeInsets.symmetric(
-                                  vertical: 16.0,
-                                  horizontal: 24.0,
-                                ),
-                                color: _selectedIndex == index
-                                    ? MacosColors.systemGrayColor.withOpacity(
-                                        0.2,
-                                      )
-                                    : Colors.transparent,
-                                child: MacosListTile(
-                                  leading: Icon(
-                                    isUrl
-                                        ? CupertinoIcons.link
-                                        : CupertinoIcons.text_quote,
-                                    color: isUrl
-                                        ? MacosColors.systemBlueColor
-                                        : MacosColors.systemGrayColor,
+                return Container(
+                  margin: const EdgeInsets.all(8.0),
+                  padding: const EdgeInsets.all(8.0),
+                  decoration: BoxDecoration(
+                    color: MacosTheme.of(context).brightness == Brightness.dark
+                        ? const Color.fromRGBO(40, 40, 40, 0.9)
+                        : const Color.fromRGBO(255, 255, 255, 0.9),
+                    borderRadius: BorderRadius.circular(12.0),
+                    border: Border.all(
+                      color: MacosTheme.of(context).brightness == Brightness.dark
+                          ? const Color.fromRGBO(100, 100, 100, 0.8)
+                          : const Color.fromRGBO(220, 220, 220, 0.8),
+                      width: 0.8,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.15),
+                        blurRadius: 30,
+                        spreadRadius: -5,
+                        offset: const Offset(0, 5),
+                      ),
+                    ],
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 16.0),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          flex: 2,
+                          child: ListView.builder(
+                            controller: scrollController,
+                            itemCount: items.length,
+                            itemBuilder: (context, index) {
+                              final item = items[index];
+                              final isUrl = item.type == ContentType.url;
+                              return GestureDetector(
+                                onTap: () {
+                                  setState(() {
+                                    _selectedIndex = index;
+                                  });
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 10,
                                   ),
-                                  title: Container(
-                                    margin: EdgeInsets.only(bottom: 8.0),
-                                    child: Text(
+                                  margin: const EdgeInsets.only(bottom: 4),
+                                  decoration: BoxDecoration(
+                                    color: _selectedIndex == index
+                                        ? MacosColors.systemBlueColor
+                                              .withOpacity(0.15)
+                                        : Colors.transparent,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: _selectedIndex == index
+                                        ? Border.all(
+                                            color: MacosColors.systemBlueColor,
+                                            width: 0.5,
+                                          )
+                                        : null,
+                                  ),
+                                  child: MacosListTile(
+                                    leading: Icon(
+                                      isUrl
+                                          ? CupertinoIcons.link
+                                          : CupertinoIcons.text_quote,
+                                      color: isUrl
+                                          ? MacosColors.systemBlueColor
+                                          : MacosColors.systemGrayColor,
+                                    ),
+                                    title: Text(
                                       item.content,
                                       maxLines: 2,
                                       overflow: TextOverflow.ellipsis,
                                     ),
-                                  ),
-                                  subtitle: Text(
-                                    'Captured on ${_formatDate(item.timestamp)}',
-                                    style: MacosTheme.of(context)
-                                        .typography
-                                        .caption2
-                                        .copyWith(color: Colors.grey),
+                                    subtitle: Text(
+                                      'Captured on ${_formatDate(item.timestamp)}',
+                                      style: MacosTheme.of(context)
+                                          .typography
+                                          .caption2
+                                          .copyWith(color: Colors.grey),
+                                    ),
                                   ),
                                 ),
-                              ),
-                            );
-                          },
+                              );
+                            },
+                          ),
                         ),
-                      ),
-                      VerticalDivider(
-                        width: 1,
-                        color: Colors.white.withAlpha(30),
-                      ),
-                      Expanded(
-                        flex: 3,
-                        child: _selectedIndex == null
-                            ? const Center(
-                                child: Text('Select an item to see details'),
-                              )
-                            : _buildDetailView(items[_selectedIndex!]),
-                      ),
-                    ],
+                        VerticalDivider(
+                          width: 1,
+                          color: Colors.white.withAlpha(30),
+                        ),
+                        Expanded(
+                          flex: 3,
+                          child: _selectedIndex == null
+                              ? const Center(
+                                  child: Text('Select an item to see details'),
+                                )
+                              : _buildDetailView(items[_selectedIndex!]),
+                        ),
+                      ],
+                    ),
                   ),
                 );
               },
