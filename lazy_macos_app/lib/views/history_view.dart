@@ -28,6 +28,7 @@ class _HistoryViewState extends State<HistoryView> {
     super.initState();
     _loadCapturedItems();
   }
+
   final GeminiService _geminiService = GeminiService();
 
   Future<String> _getSummary(CapturedContent item) async {
@@ -62,7 +63,9 @@ class _HistoryViewState extends State<HistoryView> {
       builder: (_) => MacosAlertDialog(
         appIcon: const FlutterLogo(size: 56),
         title: const Text('Delete Item'),
-        message: const Text('Are you sure you want to delete this item? This action cannot be undone.'),
+        message: const Text(
+          'Are you sure you want to delete this item? This action cannot be undone.',
+        ),
         primaryButton: PushButton(
           controlSize: ControlSize.large,
           onPressed: () async {
@@ -129,53 +132,87 @@ class _HistoryViewState extends State<HistoryView> {
                   return const Center(
                     child: Text(
                       'No captured items yet',
-                      style: TextStyle(fontSize: 16, color: MacosColors.systemGrayColor),
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: MacosColors.systemGrayColor,
+                      ),
                     ),
                   );
                 }
 
                 final items = snapshot.data!;
-                return ResizablePane(
-                  minSize: 200,
-                  startSize: 300,
-                  windowBreakpoint: 600,
-                  resizableSide: ResizableSide.right,
-                  builder: (context, scrollController) {
-                    return ListView.builder(
-                      controller: scrollController,
-                      itemCount: items.length,
-                      itemBuilder: (context, index) {
-                        final item = items[index];
-                        final isUrl = item.type == ContentType.url;
-                        return GestureDetector(
-                          onTap: () {
-                            setState(() {
-                              _selectedIndex = index;
-                            });
-                          },
-                          child: Container(
-                            color: _selectedIndex == index
-                                ? MacosColors.systemGrayColor.withOpacity(0.2)
-                                : Colors.transparent,
-                            child: MacosListTile(
-                              leading: Icon(
-                                isUrl ? CupertinoIcons.link : CupertinoIcons.text_quote,
-                                color: isUrl
-                                    ? MacosColors.systemBlueColor
-                                    : MacosColors.systemGrayColor,
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 24.0),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        flex: 2,
+                        child: ListView.builder(
+                          controller: scrollController,
+                          itemCount: items.length,
+                          itemBuilder: (context, index) {
+                            final item = items[index];
+                            final isUrl = item.type == ContentType.url;
+                            return GestureDetector(
+                              onTap: () {
+                                setState(() {
+                                  _selectedIndex = index;
+                                });
+                              },
+                              child: Container(
+                                padding: EdgeInsets.symmetric(
+                                  vertical: 16.0,
+                                  horizontal: 24.0,
+                                ),
+                                color: _selectedIndex == index
+                                    ? MacosColors.systemGrayColor.withOpacity(
+                                        0.2,
+                                      )
+                                    : Colors.transparent,
+                                child: MacosListTile(
+                                  leading: Icon(
+                                    isUrl
+                                        ? CupertinoIcons.link
+                                        : CupertinoIcons.text_quote,
+                                    color: isUrl
+                                        ? MacosColors.systemBlueColor
+                                        : MacosColors.systemGrayColor,
+                                  ),
+                                  title: Container(
+                                    margin: EdgeInsets.only(bottom: 8.0),
+                                    child: Text(
+                                      item.content,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  subtitle: Text(
+                                    'Captured on ${_formatDate(item.timestamp)}',
+                                    style: MacosTheme.of(context)
+                                        .typography
+                                        .caption2
+                                        .copyWith(color: Colors.grey),
+                                  ),
+                                ),
                               ),
-                              title: Text(item.content, maxLines: 1, overflow: TextOverflow.ellipsis),
-                              subtitle: Text('Captured on ${_formatDate(item.timestamp)}',
-                                  style: MacosTheme.of(context).typography.caption2),
-                            ),
-                          ),
-                        );
-                      },
-                    );
-                  },
-                  endPane: _selectedIndex == null
-                      ? const Center(child: Text('Select an item to see details'))
-                      : _buildDetailView(items[_selectedIndex!]),
+                            );
+                          },
+                        ),
+                      ),
+                      VerticalDivider(
+                        width: 1,
+                        color: Colors.white.withAlpha(30),
+                      ),
+                      Expanded(
+                        flex: 3,
+                        child: _selectedIndex == null
+                            ? const Center(
+                                child: Text('Select an item to see details'),
+                              )
+                            : _buildDetailView(items[_selectedIndex!]),
+                      ),
+                    ],
+                  ),
                 );
               },
             );
@@ -221,9 +258,12 @@ class _HistoryViewState extends State<HistoryView> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  SelectableText(item.content, style: MacosTheme.of(context).typography.body),
+                  SelectableText(
+                    item.content,
+                    style: MacosTheme.of(context).typography.body,
+                  ),
                   const SizedBox(height: 20),
-                  const Divider(),
+                  Divider(color: Colors.white.withAlpha(30)),
                   const SizedBox(height: 20),
                   FutureBuilder<String>(
                     future: _getSummary(item),

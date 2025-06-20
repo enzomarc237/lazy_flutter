@@ -20,7 +20,7 @@ class GeminiService {
     }
 
     try {
-      final model = GenerativeModel(model: 'gemini-pro', apiKey: apiKey);
+      final model = GenerativeModel(model: 'gemini-2.0-flash', apiKey: apiKey);
       final prompt = 'Summarize the following text: $text';
       final content = [Content.text(prompt)];
       final response = await model.generateContent(content);

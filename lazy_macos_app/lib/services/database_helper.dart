@@ -20,11 +20,7 @@ class DatabaseHelper {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, 'lazy_app.db');
 
-    return await openDatabase(
-      path,
-      version: 1,
-      onCreate: _onCreate,
-    );
+    return await openDatabase(path, version: 1, onCreate: _onCreate);
   }
 
   Future<void> _onCreate(Database db, int version) async {
@@ -44,10 +40,10 @@ class DatabaseHelper {
   Future<int> insertCapture(CapturedContent capture) async {
     final db = await database;
     final map = capture.toMap();
-    
+
     // Convert enum to string for storage
     map['type'] = capture.type.toString().split('.').last;
-    
+
     return await db.insert('captures', map);
   }
 
@@ -61,12 +57,13 @@ class DatabaseHelper {
 
     return List.generate(maps.length, (i) {
       final map = maps[i];
-      // Convert string back to enum
-      map['type'] = map['type'] == 'url' 
-          ? ContentType.url.toString() 
-          : ContentType.text.toString();
-      
-      return CapturedContent.fromMap(map);
+      return CapturedContent(
+        id: map['id'],
+        content: map['content'],
+        type: map['type'] == 'url' ? ContentType.url : ContentType.text,
+        summary: map['summary'],
+        timestamp: DateTime.parse(map['created_at']),
+      );
     });
   }
 
@@ -84,11 +81,7 @@ class DatabaseHelper {
   // Delete a capture
   Future<int> deleteCapture(int id) async {
     final db = await database;
-    return await db.delete(
-      'captures',
-      where: 'id = ?',
-      whereArgs: [id],
-    );
+    return await db.delete('captures', where: 'id = ?', whereArgs: [id]);
   }
 
   // Clear all captures (for testing)
@@ -109,11 +102,13 @@ class DatabaseHelper {
 
     if (maps.isNotEmpty) {
       final map = maps.first;
-      map['type'] = map['type'] == 'url' 
-          ? ContentType.url.toString() 
-          : ContentType.text.toString();
-      
-      return CapturedContent.fromMap(map);
+      return CapturedContent(
+        id: map['id'],
+        content: map['content'],
+        type: map['type'] == 'url' ? ContentType.url : ContentType.text,
+        summary: map['summary'],
+        timestamp: DateTime.parse(map['created_at']),
+      );
     }
     return null;
   }

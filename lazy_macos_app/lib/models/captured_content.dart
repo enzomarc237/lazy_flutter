@@ -45,7 +45,7 @@ class CapturedContent {
       'content': content,
       'type': type.toString().split('.').last,
       'summary': summary,
-      'timestamp': timestamp.toIso8601String(),
+      'created_at': timestamp.toIso8601String(),
     };
   }
 
@@ -54,11 +54,9 @@ class CapturedContent {
     return CapturedContent(
       id: map['id'],
       content: map['content'],
-      type: map['type'] == 'url'
-          ? ContentType.url
-          : ContentType.text,
+      type: map['type'] == 'url' ? ContentType.url : ContentType.text,
       summary: map['summary'],
-      timestamp: DateTime.parse(map['timestamp']),
+      timestamp: DateTime.parse(map['created_at']),
     );
   }
 }
