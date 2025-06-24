@@ -65,8 +65,7 @@ class _CommandCenterViewState extends State<CommandCenterView> {
       Command(
         title: 'Notifications',
         icon: CupertinoIcons.bell,
-        action: () {},
-        badgeCount: 4,
+        action: () {}, // Placeholder for future notification center
       ),
       Command(
         title: 'Clear',
@@ -179,6 +178,10 @@ class _CommandCenterViewState extends State<CommandCenterView> {
 
     if (success) {
       _textController.clear();
+      await _contentService.showNotification(
+        'Content Saved',
+        'Your content has been successfully saved to history.',
+      );
       Timer(const Duration(milliseconds: 200), () async {
         await windowManager.hide();
       });

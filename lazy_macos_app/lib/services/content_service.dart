@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:local_notifier/local_notifier.dart'; // Added for local notifications
 import '../models/captured_content.dart';
 import 'database_helper.dart';
 
@@ -53,4 +54,22 @@ class ContentService {
   Future<int> updateCaptureSummary(int id, String summary) async {
     return await _dbHelper.updateCaptureSummary(id, summary);
   }
+  
+    Future<void> showNotification(String title, String body) async {
+      LocalNotification notification = LocalNotification(
+        title: title,
+        body: body,
+        silent: true,
+      );
+      notification.show();
+    }
 }
+
+  Future<void> showNotification(String title, String body) async {
+    LocalNotification notification = LocalNotification(
+      title: title,
+      body: body,
+      silent: true,
+    );
+    notification.show();
+  }

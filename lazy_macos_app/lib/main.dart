@@ -5,6 +5,7 @@ import 'package:macos_ui/macos_ui.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:hotkey_manager/hotkey_manager.dart';
 import 'package:tray_manager/tray_manager.dart';
+import 'package:local_notifier/local_notifier.dart'; // Added for local notifications
 import 'dart:io'; // Required for Platform.isMacOS
 import 'dart:async'; // For debounce timer
 
@@ -43,6 +44,9 @@ void main() async {
   setupServiceLocator();
   await windowManager.ensureInitialized();
   await hotKeyManager.unregisterAll(); // Unregister all previous hotkeys
+  await localNotifier.setup( // Initialize local_notifier
+    appName: appTitle,
+  );
   await setupHotkeys();
   await setupTray();
 
