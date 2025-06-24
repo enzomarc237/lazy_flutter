@@ -310,6 +310,24 @@ class _HistoryViewState extends State<HistoryView> {
                     item.content,
                     style: MacosTheme.of(context).typography.body,
                   ),
+                  if (item.tags.isNotEmpty) ...[
+                    const SizedBox(height: 20),
+                    Wrap(
+                      spacing: 8.0,
+                      runSpacing: 4.0,
+                      children: item.tags.map((tag) {
+                        return Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: MacosColors.systemGrayColor.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text('#$tag'),
+                        );
+                      }).toList(),
+                    ),
+                  ],
                   const SizedBox(height: 20),
                   Divider(color: Colors.white.withAlpha(30)),
                   const SizedBox(height: 20),

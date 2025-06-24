@@ -15,7 +15,7 @@ class ContentService {
   // Add a new captured content
   Future<bool> addContent(CapturedContent content) async {
     try {
-      await _dbHelper.insertCapture(content);
+      await _dbHelper.insertCapture(content, content.tags);
       print('Content saved to database: ${jsonEncode(content.toMap())}');
       return true;
     } catch (e) {

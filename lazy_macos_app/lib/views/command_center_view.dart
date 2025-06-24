@@ -54,6 +54,11 @@ class _CommandCenterViewState extends State<CommandCenterView> {
         action: _saveContent,
       ),
       Command(
+        title: 'Copy to Clipboard',
+        icon: CupertinoIcons.doc_on_doc,
+        action: _copyToClipboard,
+      ),
+      Command(
         title: 'Show History',
         icon: CupertinoIcons.clock,
         action: () => _navigationService.switchToView(AppView.history),
@@ -194,6 +199,17 @@ class _CommandCenterViewState extends State<CommandCenterView> {
     _filteredCommands[_selectedIndex].action();
   }
 
+  void _copyToClipboard() {
+    final String content = _textController.text.trim();
+    if (content.isEmpty) return;
+
+    Clipboard.setData(ClipboardData(text: content));
+    // Hide window after a short delay for user feedback
+    Timer(const Duration(milliseconds: 100), () {
+      windowManager.hide();
+    });
+  }
+
   void _saveContent() async {
     final String content = _textController.text.trim();
     if (content.isEmpty) return;
@@ -205,7 +221,7 @@ class _CommandCenterViewState extends State<CommandCenterView> {
       _textController.clear();
       await _contentService.showNotification(
         'Content Saved',
-        'Your content has been successfully saved to history.',
+        'Content and tags saved to history.',
       );
       _notificationService.addNotification(
         'Content Saved',

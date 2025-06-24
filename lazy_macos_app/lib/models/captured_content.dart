@@ -8,6 +8,7 @@ class CapturedContent {
   final ContentType type;
   final DateTime timestamp;
   final String? summary;
+  final List<String> tags;
 
   CapturedContent({
     this.id,
@@ -15,14 +16,19 @@ class CapturedContent {
     required this.type,
     DateTime? timestamp,
     this.summary,
+    this.tags = const [],
   }) : timestamp = timestamp ?? DateTime.now();
 
   // Factory method to create content from string
   factory CapturedContent.fromString(String content) {
-    final bool isUrl = _isUrl(content);
+    final tagRegex = RegExp(r'#(\w+)');
+    final tags = tagRegex.allMatches(content).map((m) => m.group(1)!).toList();
+    final cleanContent = content.replaceAll(tagRegex, '').trim();
+    final bool isUrl = _isUrl(cleanContent);
     return CapturedContent(
-      content: content,
+      content: cleanContent,
       type: isUrl ? ContentType.url : ContentType.text,
+      tags: tags,
     );
   }
 
@@ -68,6 +74,7 @@ class CapturedContent {
     ContentType? type,
     DateTime? timestamp,
     String? summary,
+    List<String>? tags,
   }) {
     return CapturedContent(
       id: id ?? this.id,
@@ -75,6 +82,7 @@ class CapturedContent {
       type: type ?? this.type,
       timestamp: timestamp ?? this.timestamp,
       summary: summary ?? this.summary,
+      tags: tags ?? this.tags,
     );
   }
 }
