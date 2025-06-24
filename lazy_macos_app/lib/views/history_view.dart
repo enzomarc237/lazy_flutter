@@ -2,25 +2,29 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:macos_ui/macos_ui.dart';
-import 'package:contextual_menu/contextual_menu.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../services/gemini_service.dart';
 import '../models/captured_content.dart';
 import '../services/content_service.dart';
+import '../services/navigation_service.dart';
+import '../services/service_locator.dart';
+import '../core/app_views.dart';
 
 class HistoryView extends StatefulWidget {
-  final VoidCallback onShowCommandCenter;
-
-  const HistoryView({super.key, required this.onShowCommandCenter});
+  const HistoryView({super.key});
 
   @override
   State<HistoryView> createState() => _HistoryViewState();
 }
 
 class _HistoryViewState extends State<HistoryView> {
-  final ContentService _contentService = ContentService();
+  final ContentService _contentService = getIt<ContentService>();
+  final GeminiService _geminiService = getIt<GeminiService>();
+  final NavigationService _navigationService = getIt<NavigationService>();
+
   late Future<List<CapturedContent>> _capturedItemsFuture;
+  List<CapturedContent> _items = [];
   int? _selectedIndex;
 
   @override
@@ -28,8 +32,6 @@ class _HistoryViewState extends State<HistoryView> {
     super.initState();
     _loadCapturedItems();
   }
-
-  final GeminiService _geminiService = GeminiService();
 
   Future<String> _getSummary(CapturedContent item) async {
     if (item.summary != null && item.summary!.isNotEmpty) {
@@ -39,21 +41,55 @@ class _HistoryViewState extends State<HistoryView> {
   }
 
   Future<void> _generateSummary(CapturedContent item) async {
-    final summary = await _geminiService.summarize(item.content);
-    if (item.id != null) {
+    if (item.id == null) return;
+
+    try {
+      final summary = await _geminiService.summarize(item.content);
       await _contentService.updateCaptureSummary(item.id!, summary);
-      _loadCapturedItems();
+      // Instead of reloading all items, just update the specific one
+      if (!mounted) return;
+      setState(() {
+        final index = _items.indexWhere((i) => i.id == item.id);
+        if (index != -1) {
+          _items[index] = item.copyWith(summary: summary);
+        }
+      });
+    } on GeminiException catch (e) {
+      _showErrorDialog('Summarization Error', e.message);
+    } catch (e) {
+      _showErrorDialog('An Unexpected Error Occurred', e.toString());
     }
   }
 
   void _loadCapturedItems() {
     setState(() {
-      _capturedItemsFuture = _contentService.getAllContent();
+      _capturedItemsFuture = _contentService.getAllContent().then((items) {
+        if (mounted) {
+          _items = items;
+        }
+        return items;
+      });
     });
   }
 
   void _copyToClipboard(String content) {
     Clipboard.setData(ClipboardData(text: content));
+  }
+
+  void _showErrorDialog(String title, String message) {
+    showMacosAlertDialog(
+      context: context,
+      builder: (_) => MacosAlertDialog(
+        appIcon: const FlutterLogo(size: 56),
+        title: Text(title),
+        message: Text(message),
+        primaryButton: PushButton(
+          controlSize: ControlSize.large,
+          onPressed: () => Navigator.pop(context),
+          child: const Text('OK'),
+        ),
+      ),
+    );
   }
 
   void _deleteItem(CapturedContent item) {
@@ -62,15 +98,20 @@ class _HistoryViewState extends State<HistoryView> {
       builder: (_) => MacosAlertDialog(
         appIcon: const FlutterLogo(size: 56),
         title: const Text('Delete Item'),
-        message: const Text('Are you sure you want to delete this item?'),
+        message: const Text(
+          'Are you sure you want to delete this item? This action cannot be undone.',
+        ),
         primaryButton: PushButton(
           controlSize: ControlSize.large,
           onPressed: () async {
             Navigator.pop(context);
             if (item.id != null) {
               await _contentService.deleteContent(item.id!);
-              _loadCapturedItems();
-              setState(() => _selectedIndex = null);
+              if (!mounted) return;
+              setState(() {
+                _items.removeWhere((i) => i.id == item.id);
+                _selectedIndex = null;
+              });
             }
           },
           child: const Text('Delete'),
@@ -93,71 +134,54 @@ class _HistoryViewState extends State<HistoryView> {
 
   @override
   Widget build(BuildContext context) {
-    return MacosScaffold(
-      toolBar: ToolBar(
-        title: const Text('Capture History'),
-        actions: [
-          ToolBarIconButton(
-            label: 'Back to Command Center',
-            icon: const MacosIcon(CupertinoIcons.return_icon),
-            onPressed: widget.onShowCommandCenter,
-            showLabel: false,
-          ),
-          ToolBarIconButton(
-            label: 'Refresh',
-            icon: const MacosIcon(CupertinoIcons.refresh),
-            onPressed: _loadCapturedItems,
-            showLabel: false,
-          ),
-        ],
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: MacosTheme.of(context).canvasColor,
+        borderRadius: BorderRadius.circular(10),
       ),
-      children: [
-        ContentArea(
-          builder: (context, scrollController) {
-            return FutureBuilder<List<CapturedContent>>(
-              future: _capturedItemsFuture,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: ProgressCircle());
-                } else if (snapshot.hasError) {
-                  return Center(child: Text('Error: ${snapshot.error}'));
-                } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                  return const Center(
-                    child: Text(
-                      'No captured items yet',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: MacosColors.systemGrayColor,
+      child: MacosScaffold(
+        toolBar: ToolBar(
+          title: const Text('Capture History'),
+          actions: [
+            ToolBarIconButton(
+              label: 'Back to Command Center',
+              icon: const MacosIcon(CupertinoIcons.return_icon),
+              onPressed: () =>
+                  _navigationService.switchToView(AppView.commandCenter),
+              showLabel: false,
+            ),
+            ToolBarIconButton(
+              label: 'Refresh',
+              icon: const MacosIcon(CupertinoIcons.refresh),
+              onPressed: _loadCapturedItems,
+              showLabel: false,
+            ),
+          ],
+        ),
+        children: [
+          ContentArea(
+            builder: (context, scrollController) {
+              return FutureBuilder<List<CapturedContent>>(
+                future: _capturedItemsFuture,
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: ProgressCircle());
+                  } else if (snapshot.hasError) {
+                    return Center(child: Text('Error: ${snapshot.error}'));
+                  } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                    return const Center(
+                      child: Text(
+                        'No captured items yet',
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: MacosColors.systemGrayColor,
+                        ),
                       ),
-                    ),
-                  );
-                }
-
-                final items = snapshot.data!;
-                return Container(
-                  margin: const EdgeInsets.all(8.0),
-                  padding: const EdgeInsets.all(8.0),
-                  decoration: BoxDecoration(
-                    color: MacosTheme.of(context).brightness == Brightness.dark
-                        ? const Color.fromRGBO(40, 40, 40, 0.9)
-                        : const Color.fromRGBO(255, 255, 255, 0.9),
-                    borderRadius: BorderRadius.circular(12.0),
-                    border: Border.all(
-                      color: MacosTheme.of(context).brightness == Brightness.dark
-                          ? const Color.fromRGBO(100, 100, 100, 0.8)
-                          : const Color.fromRGBO(220, 220, 220, 0.8),
-                      width: 0.8,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.15),
-                        blurRadius: 30,
-                        spreadRadius: -5,
-                        offset: const Offset(0, 5),
-                      ),
-                    ],
-                  ),
-                  child: Padding(
+                    );
+                  }
+      
+                  return Padding(
                     padding: const EdgeInsets.symmetric(vertical: 16.0),
                     child: Row(
                       children: [
@@ -165,9 +189,9 @@ class _HistoryViewState extends State<HistoryView> {
                           flex: 2,
                           child: ListView.builder(
                             controller: scrollController,
-                            itemCount: items.length,
+                            itemCount: _items.length,
                             itemBuilder: (context, index) {
-                              final item = items[index];
+                              final item = _items[index];
                               final isUrl = item.type == ContentType.url;
                               return GestureDetector(
                                 onTap: () {
@@ -183,8 +207,9 @@ class _HistoryViewState extends State<HistoryView> {
                                   margin: const EdgeInsets.only(bottom: 4),
                                   decoration: BoxDecoration(
                                     color: _selectedIndex == index
-                                        ? MacosColors.systemBlueColor
-                                              .withOpacity(0.15)
+                                        ? MacosColors.systemBlueColor.withOpacity(
+                                            0.15,
+                                          )
                                         : Colors.transparent,
                                     borderRadius: BorderRadius.circular(8),
                                     border: _selectedIndex == index
@@ -231,17 +256,17 @@ class _HistoryViewState extends State<HistoryView> {
                               ? const Center(
                                   child: Text('Select an item to see details'),
                                 )
-                              : _buildDetailView(items[_selectedIndex!]),
+                              : _buildDetailView(_items[_selectedIndex!]),
                         ),
                       ],
                     ),
-                  ),
-                );
-              },
-            );
-          },
-        ),
-      ],
+                  );
+                },
+              );
+            },
+          ),
+        ],
+      ),
     );
   }
 

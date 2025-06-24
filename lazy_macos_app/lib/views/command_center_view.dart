@@ -3,20 +3,22 @@ import 'package:flutter/cupertino.dart' hide OverlayVisibilityMode;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:macos_ui/macos_ui.dart';
+import 'package:url_launcher/url_launcher_string.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../models/captured_content.dart';
 import '../models/command.dart';
 import '../services/content_service.dart';
+import '../services/clipboard_service.dart';
+import '../services/navigation_service.dart';
+import '../services/service_locator.dart';
+import '../core/app_views.dart';
 
 class CommandCenterView extends StatefulWidget {
-  final VoidCallback onShowHistory;
-  final VoidCallback onShowSettings;
-
   const CommandCenterView({
     super.key,
-    required this.onShowHistory,
-    required this.onShowSettings,
+    // Removed onShowHistory from here as it's not a direct property of the widget
+    // and should be handled by the NavigationService directly.
   });
 
   @override
@@ -26,7 +28,9 @@ class CommandCenterView extends StatefulWidget {
 class _CommandCenterViewState extends State<CommandCenterView> {
   final TextEditingController _textController = TextEditingController();
   final FocusNode _focusNode = FocusNode();
-  final ContentService _contentService = ContentService();
+  final ContentService _contentService = getIt<ContentService>();
+  final ClipboardService _clipboardService = getIt<ClipboardService>();
+  final NavigationService _navigationService = getIt<NavigationService>();
 
   // UI state
   bool _isUrl = false;
@@ -38,7 +42,7 @@ class _CommandCenterViewState extends State<CommandCenterView> {
 
   @override
   void initState() {
-    super.initState();
+    super.initState(); // It's conventional to call super.initState() first.
 
     // Initialize commands with actions that call the callbacks from the widget
     _commands = [
@@ -50,13 +54,13 @@ class _CommandCenterViewState extends State<CommandCenterView> {
       Command(
         title: 'Show History',
         icon: CupertinoIcons.clock,
-        action: widget.onShowHistory,
-        badgeCount: 8,
+        action: () => _navigationService.switchToView(AppView.history),
+        badgeCount: 0, // Will be updated dynamically
       ),
       Command(
         title: 'Settings',
         icon: CupertinoIcons.settings,
-        action: widget.onShowSettings,
+        action: () => _navigationService.switchToView(AppView.settings),
       ),
       Command(
         title: 'Notifications',
@@ -72,11 +76,13 @@ class _CommandCenterViewState extends State<CommandCenterView> {
     ];
 
     _filteredCommands = _commands;
-    _checkClipboard();
+    _updateHistoryBadge(); // Initial badge update
+    _clipboardService.checkClipboard(); // Initial clipboard check on view load
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _focusNode.requestFocus();
     });
 
+    _clipboardService.addListener(_onClipboardContentChanged); // Listen for clipboard changes
     _textController.addListener(_onTextChanged);
   }
 
@@ -84,8 +90,27 @@ class _CommandCenterViewState extends State<CommandCenterView> {
   void dispose() {
     _textController.removeListener(_onTextChanged);
     _textController.dispose();
+    _clipboardService.removeListener(_onClipboardContentChanged); // Remove listener
     _focusNode.dispose();
     super.dispose();
+  }
+
+  Future<void> _updateHistoryBadge() async {
+    final count = (await _contentService.getAllContent()).length;
+    if (!mounted) return;
+    setState(() {
+      final historyCommandIndex = _commands.indexWhere(
+        (cmd) => cmd.title == 'Show History',
+      );
+      if (historyCommandIndex != -1) {
+        _commands[historyCommandIndex] = Command(
+          title: 'Show History',
+          icon: CupertinoIcons.clock,
+          action: () => _navigationService.switchToView(AppView.history),
+          badgeCount: count,
+        );
+      }
+    });
   }
 
   void _onTextChanged() {
@@ -113,26 +138,30 @@ class _CommandCenterViewState extends State<CommandCenterView> {
     });
   }
 
-  Future<void> _checkClipboard() async {
-    try {
-      final ClipboardData? data = await Clipboard.getData(Clipboard.kTextPlain);
-      if (data != null && data.text != null && data.text!.isNotEmpty) {
-        setState(() {
-          final text = data.text!.trim();
-          _textController.text = text;
-          _isUrl = CapturedContent.fromString(text).type == ContentType.url;
-          _textController.selection = TextSelection(
-            baseOffset: 0,
-            extentOffset: _textController.text.length,
-          );
-        });
-      }
-    } catch (e) {
-      debugPrint('Error reading clipboard: $e');
+  /// Called when the ClipboardService notifies of a change in clipboard content.
+  void _onClipboardContentChanged() {
+    final String? clipboardText = _clipboardService.lastClipboardContent;
+    if (clipboardText != null && clipboardText != _textController.text.trim()) {
+      setState(() {
+        _textController.text = clipboardText;
+        _isUrl = CapturedContent.fromString(clipboardText).type == ContentType.url;
+        _textController.selection = TextSelection(
+          baseOffset: 0,
+          extentOffset: _textController.text.length,
+        );
+      });
+    } else if (clipboardText == null && _textController.text.isNotEmpty) {
+      _textController.clear(); // Clear if clipboard is empty and text field is not
     }
   }
 
   void _executeCommand() {
+    if (_isUrl) {
+      _saveContent();
+      launchUrlString(_textController.text.trim());
+      return;
+    }
+
     if (_filteredCommands.isEmpty) {
       _saveContent();
       return;
@@ -198,169 +227,140 @@ class _CommandCenterViewState extends State<CommandCenterView> {
           children: [
             ContentArea(
               builder: (context, scrollController) {
-                return Container(
-                  margin: const EdgeInsets.all(8.0),
-                  padding: const EdgeInsets.all(8.0),
-                  decoration: BoxDecoration(
-                    color: MacosTheme.of(context).brightness == Brightness.dark
-                        ? const Color.fromRGBO(40, 40, 40, 0.5)
-                        : const Color.fromRGBO(255, 255, 255, 0.9),
-                    borderRadius: BorderRadius.circular(12.0),
-                    border: Border.all(
-                      color:
-                          MacosTheme.of(context).brightness == Brightness.dark
-                          ? const Color.fromRGBO(100, 100, 100, 0.8)
-                          : const Color.fromRGBO(220, 220, 220, 0.8),
-                      width: 0.8,
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    MacosTextField(
+                      controller: _textController,
+                      focusNode: _focusNode,
+                      placeholder: 'Type an action or navigate...',
+                      clearButtonMode: OverlayVisibilityMode.editing,
+                      focusedDecoration: BoxDecoration(
+                        border: Border.all(width: 0, color: Colors.transparent),
+                      ),
+                      autofocus: true,
+                      onSubmitted: (value) => _executeCommand(),
+                      prefix: Icon(
+                        _isUrl ? CupertinoIcons.link : CupertinoIcons.search,
+                        size: 16,
+                        color: MacosTheme.of(context).primaryColor,
+                      ),
                     ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.15),
-                        blurRadius: 30,
-                        spreadRadius: -5,
-                        offset: const Offset(0, 5),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      MacosTextField(
-                        controller: _textController,
-                        focusNode: _focusNode,
-                        placeholder: 'Type an action or navigate...',
-                        clearButtonMode: OverlayVisibilityMode.editing,
-                        focusedDecoration: BoxDecoration(
-                          border: Border.all(
-                            width: 0,
-                            color: Colors.transparent,
-                          ),
-                        ),
-                        autofocus: true,
-                        onSubmitted: (value) => _executeCommand(),
-                        prefix: Icon(
-                          _isUrl ? CupertinoIcons.link : CupertinoIcons.search,
-                          size: 16,
-                          color: MacosTheme.of(context).primaryColor,
-                        ),
-                      ),
-                      const Divider(height: 16, color: Colors.white24),
-                      SizedBox(height: 8.0),
-                      Expanded(
-                        child:
-                            (_textController.text.isNotEmpty &&
-                                _filteredCommands.isEmpty)
-                            ? Center(
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const Icon(
-                                      CupertinoIcons.search,
-                                      size: 32,
+                    const Divider(height: 16, color: Colors.white24),
+                    SizedBox(height: 8.0),
+                    Expanded(
+                      child:
+                          (_textController.text.isNotEmpty &&
+                              _filteredCommands.isEmpty)
+                          ? Center(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(
+                                    CupertinoIcons.search,
+                                    size: 32,
+                                    color: MacosColors.systemGrayColor,
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'No results for "${_textController.text}"',
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(
                                       color: MacosColors.systemGrayColor,
                                     ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      'No results for "${_textController.text}"',
-                                      textAlign: TextAlign.center,
-                                      style: const TextStyle(
-                                        color: MacosColors.systemGrayColor,
-                                      ),
+                                  ),
+                                ],
+                              ),
+                            )
+                          : ListView.builder(
+                              itemCount: _filteredCommands.length,
+                              itemBuilder: (context, index) {
+                                final command = _filteredCommands[index];
+                                return GestureDetector(
+                                  onTap: () {
+                                    setState(() {
+                                      _selectedIndex = index;
+                                    });
+                                    _executeCommand();
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                      vertical: 10,
                                     ),
-                                  ],
-                                ),
-                              )
-                            : ListView.builder(
-                                itemCount: _filteredCommands.length,
-                                itemBuilder: (context, index) {
-                                  final command = _filteredCommands[index];
-                                  return GestureDetector(
-                                    onTap: () {
-                                      setState(() {
-                                        _selectedIndex = index;
-                                      });
-                                      _executeCommand();
-                                    },
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 16,
-                                        vertical: 10,
-                                      ),
-                                      margin: const EdgeInsets.only(bottom: 4),
-                                      decoration: BoxDecoration(
-                                        color: _selectedIndex == index
-                                            ? MacosColors.systemBlueColor
-                                                  .withOpacity(0.15)
-                                            : Colors.transparent,
-                                        borderRadius: BorderRadius.circular(8),
-                                        border: _selectedIndex == index
-                                            ? Border.all(
-                                                color:
-                                                    MacosColors.systemBlueColor,
-                                                width: 0.5,
-                                              )
-                                            : null,
-                                      ),
-                                      child: Row(
-                                        children: [
-                                          Icon(
-                                            command.icon,
-                                            size: 18,
-                                            color: MacosColors.systemGrayColor,
-                                          ),
-                                          const SizedBox(width: 10),
-                                          Text(
-                                            command.title,
-                                            style: MacosTheme.of(
-                                              context,
-                                            ).typography.body,
-                                          ),
-                                          const Spacer(),
-                                          if (command.badgeCount != null &&
-                                              command.badgeCount! > 0)
-                                            Container(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                    horizontal: 8,
-                                                    vertical: 2,
-                                                  ),
-                                              decoration: BoxDecoration(
-                                                color:
-                                                    MacosColors.systemGrayColor,
-                                                borderRadius:
-                                                    BorderRadius.circular(12),
-                                              ),
-                                              child: Text(
-                                                '${command.badgeCount}',
-                                                style: const TextStyle(
-                                                  color: Colors.white,
-                                                  fontWeight: FontWeight.bold,
-                                                ),
+                                    margin: const EdgeInsets.only(bottom: 4),
+                                    decoration: BoxDecoration(
+                                      color: _selectedIndex == index
+                                          ? MacosColors.systemBlueColor
+                                                .withOpacity(0.15)
+                                          : Colors.transparent,
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: _selectedIndex == index
+                                          ? Border.all(
+                                              color:
+                                                  MacosColors.systemBlueColor,
+                                              width: 0.5,
+                                            )
+                                          : null,
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          command.icon,
+                                          size: 18,
+                                          color: MacosColors.systemGrayColor,
+                                        ),
+                                        const SizedBox(width: 10),
+                                        Text(
+                                          command.title,
+                                          style: MacosTheme.of(
+                                            context,
+                                          ).typography.body,
+                                        ),
+                                        const Spacer(),
+                                        if (command.badgeCount != null &&
+                                            command.badgeCount! > 0)
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 8,
+                                              vertical: 2,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color:
+                                                  MacosColors.systemGrayColor,
+                                              borderRadius:
+                                                  BorderRadius.circular(12),
+                                            ),
+                                            child: Text(
+                                              '${command.badgeCount}',
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.bold,
                                               ),
                                             ),
-                                        ],
-                                      ),
+                                          ),
+                                      ],
                                     ),
-                                  );
-                                },
-                              ),
+                                  ),
+                                );
+                              },
+                            ),
+                    ),
+                    const Divider(height: 16, color: Colors.white24),
+                    Container(
+                      padding: EdgeInsets.symmetric(vertical: 10.0),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          _buildHint('↑↓', 'to navigate'),
+                          const SizedBox(width: 16),
+                          _buildHint('⏎', 'to select'),
+                          const SizedBox(width: 16),
+                          _buildHint('esc', 'to close'),
+                        ],
                       ),
-                      const Divider(height: 16, color: Colors.white24),
-                      Container(
-                        padding: EdgeInsets.symmetric(vertical: 10.0),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            _buildHint('↑↓', 'to navigate'),
-                            const SizedBox(width: 16),
-                            _buildHint('⏎', 'to select'),
-                            const SizedBox(width: 16),
-                            _buildHint('esc', 'to close'),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 );
               },
             ),

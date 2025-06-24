@@ -12,6 +12,11 @@ import 'dart:async'; // For debounce timer
 import 'views/settings_view.dart';
 import 'views/history_view.dart';
 import 'views/command_center_view.dart';
+import 'core/constants.dart';
+import 'core/app_views.dart';
+import 'services/navigation_service.dart';
+import 'services/clipboard_service.dart';
+import 'services/service_locator.dart';
 // REMOVED: No longer needed here
 // import 'models/captured_content.dart';
 // import 'services/content_service.dart';
@@ -35,6 +40,7 @@ Future<void> _configureMacosWindowUtils() async {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  setupServiceLocator();
   await windowManager.ensureInitialized();
   await hotKeyManager.unregisterAll(); // Unregister all previous hotkeys
   await setupHotkeys();
@@ -43,7 +49,7 @@ void main() async {
   await _configureMacosWindowUtils();
 
   WindowOptions windowOptions = const WindowOptions(
-    size: Size(700, 450), // Default to command center size
+    size: kCommandCenterSize,
     center: true,
     backgroundColor: Colors.transparent,
     skipTaskbar: true, // Hide from taskbar, rely on tray and hotkey
@@ -93,8 +99,8 @@ Future showHide() async {
   } else {
     await windowManager.show();
     await windowManager.focus();
-    // FIXME: Refreshing clipboard on show is temporarily disabled post-refactor.
-    // commandCenterKey.currentState?._checkClipboard();
+    // Trigger clipboard check when the window is shown
+    getIt<ClipboardService>().checkClipboard();
   }
 }
 
@@ -128,76 +134,72 @@ class MyApp extends StatefulWidget {
   State<MyApp> createState() => _MyAppState();
 }
 
-// Enum for app views
-enum AppView { commandCenter, history, settings }
-
-class _MyAppState extends State<MyApp> with TrayListener {
-  // Current view
-  AppView _currentView = AppView.commandCenter;
+class _MyAppState extends State<MyApp> with TrayListener, WindowListener {
+  final NavigationService _navigationService = getIt<NavigationService>();
 
   @override
   void initState() {
     super.initState();
     trayManager.addListener(this);
+    windowManager.addListener(this);
+    _navigationService.addListener(_onViewChanged);
   }
 
   @override
   void dispose() {
     trayManager.removeListener(this);
-    // It's good practice to unregister hotkeys if the app is truly closing,
-    // though for a tray app, it might stay registered until quit from tray.
-    // hotKeyManager.unregister(_hotKey);
+    windowManager.removeListener(this);
+    _navigationService.removeListener(_onViewChanged);
     super.dispose();
   }
 
-  // Switch between views
-  void _switchToView(AppView view) {
-    setState(() {
-      _currentView = view;
-    });
-
+  // This method is called by the listener when the view changes.
+  // It handles side effects like resizing and showing the window.
+  void _onViewChanged() {
+    final view = _navigationService.currentView;
     // Adjust window size and properties based on view
     if (view == AppView.commandCenter) {
       windowManager.setResizable(false);
-      windowManager.setSize(const Size(700, 450));
+      windowManager.setSize(kCommandCenterSize);
       windowManager.center();
     } else if (view == AppView.history) {
+      windowManager.show();
+      windowManager.focus();
       windowManager.setResizable(true);
-      windowManager.setSize(const Size(1200, 700));
+      windowManager.setSize(kHistoryViewSize);
       windowManager.center();
     } else if (view == AppView.settings) {
+      windowManager.show();
+      windowManager.focus();
       windowManager.setResizable(true);
-      windowManager.setSize(const Size(700, 450));
+      windowManager.setSize(kSettingsViewSize);
       windowManager.center();
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return MacosApp(
-      title: appTitle,
-      color: MacosColors.transparent,
-      theme: MacosThemeData.light(),
-      darkTheme: MacosThemeData.dark(),
-      themeMode: ThemeMode.system,
-      debugShowCheckedModeBanner: false,
-      home: () {
-        switch (_currentView) {
-          case AppView.commandCenter:
-            return CommandCenterView(
-              onShowHistory: () => _switchToView(AppView.history),
-              onShowSettings: () => _switchToView(AppView.settings),
-            );
-          case AppView.history:
-            return HistoryView(
-              onShowCommandCenter: () => _switchToView(AppView.commandCenter),
-            );
-          case AppView.settings:
-            return SettingsView(
-              onShowCommandCenter: () => _switchToView(AppView.commandCenter),
-            );
-        }
-      }(),
+    // AnimatedBuilder rebuilds the widget tree when the navigation service notifies its listeners.
+    return AnimatedBuilder(
+      animation: _navigationService,
+      builder: (context, child) => MacosApp(
+        title: appTitle,
+        color: MacosColors.transparent,
+        theme: MacosThemeData.light(),
+        darkTheme: MacosThemeData.dark(),
+        themeMode: ThemeMode.system,
+        debugShowCheckedModeBanner: false,
+        home: () {
+          switch (_navigationService.currentView) {
+            case AppView.commandCenter:
+              return const CommandCenterView();
+            case AppView.history:
+              return const HistoryView();
+            case AppView.settings:
+              return const SettingsView();
+          }
+        }(),
+      ),
     );
   }
 
@@ -219,14 +221,10 @@ class _MyAppState extends State<MyApp> with TrayListener {
         await showHide();
         break;
       case 'show_history':
-        _switchToView(AppView.history);
-        await windowManager.show();
-        await windowManager.focus();
+        _navigationService.switchToView(AppView.history);
         break;
       case 'show_settings':
-        _switchToView(AppView.settings);
-        await windowManager.show();
-        await windowManager.focus();
+        _navigationService.switchToView(AppView.settings);
         break;
       case 'quit_app':
         await windowManager.destroy();

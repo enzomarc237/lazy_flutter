@@ -2,11 +2,12 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:macos_ui/macos_ui.dart';
 import '../services/gemini_service.dart';
+import '../services/navigation_service.dart';
+import '../services/service_locator.dart';
+import '../core/app_views.dart';
 
 class SettingsView extends StatefulWidget {
-  final VoidCallback onShowCommandCenter;
-
-  const SettingsView({super.key, required this.onShowCommandCenter});
+  const SettingsView({super.key});
 
   @override
   State<SettingsView> createState() => _SettingsViewState();
@@ -14,7 +15,8 @@ class SettingsView extends StatefulWidget {
 
 class _SettingsViewState extends State<SettingsView> {
   final _apiKeyController = TextEditingController();
-  final _geminiService = GeminiService();
+  final _geminiService = getIt<GeminiService>();
+  final _navigationService = getIt<NavigationService>();
 
   @override
   void initState() {
@@ -31,49 +33,50 @@ class _SettingsViewState extends State<SettingsView> {
 
   Future<void> _saveApiKey() async {
     await _geminiService.saveApiKey(_apiKeyController.text);
+    _showSavedDialog();
+  }
+
+  void _showSavedDialog() {
+    showMacosAlertDialog(
+      context: context,
+      builder: (_) => MacosAlertDialog(
+        appIcon: const MacosIcon(CupertinoIcons.check_mark_circled),
+        title: const Text('API Key Saved'),
+        message: const Text('Your Gemini API key has been saved securely.'),
+        primaryButton: PushButton(
+          controlSize: ControlSize.large,
+          onPressed: () => Navigator.pop(context),
+          child: const Text('OK'),
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    return MacosScaffold(
-      toolBar: ToolBar(
-        title: const Text('Settings'),
-        actions: [
-          ToolBarIconButton(
-            label: 'Back to Command Center',
-            icon: const MacosIcon(CupertinoIcons.return_icon),
-            onPressed: widget.onShowCommandCenter,
-            showLabel: false,
-          ),
-        ],
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: MacosTheme.of(context).canvasColor,
+        borderRadius: BorderRadius.circular(10),
       ),
-      children: [
-        ContentArea(
-          builder: (context, scrollController) {
-            return Container(
-              margin: const EdgeInsets.all(8.0),
-              padding: const EdgeInsets.all(8.0),
-              decoration: BoxDecoration(
-                color: MacosTheme.of(context).brightness == Brightness.dark
-                    ? const Color.fromRGBO(40, 40, 40, 0.9)
-                    : const Color.fromRGBO(255, 255, 255, 0.9),
-                borderRadius: BorderRadius.circular(12.0),
-                border: Border.all(
-                  color: MacosTheme.of(context).brightness == Brightness.dark
-                      ? const Color.fromRGBO(100, 100, 100, 0.8)
-                      : const Color.fromRGBO(220, 220, 220, 0.8),
-                  width: 0.8,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.15),
-                    blurRadius: 30,
-                    spreadRadius: -5,
-                    offset: const Offset(0, 5),
-                  ),
-                ],
-              ),
-              child: SingleChildScrollView(
+      child: MacosScaffold(
+        toolBar: ToolBar(
+          title: const Text('Settings'),
+          actions: [
+            ToolBarIconButton(
+              label: 'Back to Command Center',
+              icon: const MacosIcon(CupertinoIcons.return_icon),
+              onPressed: () =>
+                  _navigationService.switchToView(AppView.commandCenter),
+              showLabel: false,
+            ),
+          ],
+        ),
+        children: [
+          ContentArea(
+            builder: (context, scrollController) {
+              return SingleChildScrollView(
                 controller: scrollController,
                 padding: const EdgeInsets.all(20),
                 child: Column(
@@ -93,11 +96,11 @@ class _SettingsViewState extends State<SettingsView> {
                     ),
                   ],
                 ),
-              ),
-            );
-          },
-        ),
-      ],
+              );
+            },
+          ),
+        ],
+      ),
     );
   }
 }
