@@ -15,6 +15,7 @@ import 'views/history_view.dart';
 import 'views/command_center_view.dart';
 import 'core/constants.dart';
 import 'core/app_views.dart';
+import 'views/notification_center_view.dart';
 import 'services/navigation_service.dart';
 import 'services/clipboard_service.dart';
 import 'services/service_locator.dart';
@@ -201,6 +202,8 @@ class _MyAppState extends State<MyApp> with TrayListener, WindowListener {
               return const HistoryView();
             case AppView.settings:
               return const SettingsView();
+            case AppView.notificationCenter:
+              return NotificationCenterView();
           }
         }(),
       ),

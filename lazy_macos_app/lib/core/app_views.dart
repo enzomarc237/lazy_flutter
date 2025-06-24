@@ -1,2 +1,2 @@
 // Enum for app views
-enum AppView { commandCenter, history, settings }
+enum AppView { commandCenter, history, settings, notificationCenter }
