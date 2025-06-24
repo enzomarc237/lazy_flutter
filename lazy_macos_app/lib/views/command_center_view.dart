@@ -11,6 +11,7 @@ import '../models/command.dart';
 import '../services/content_service.dart';
 import '../services/clipboard_service.dart';
 import '../services/navigation_service.dart';
+import '../services/notification_service.dart';
 import '../services/service_locator.dart';
 import '../core/app_views.dart';
 
@@ -31,6 +32,7 @@ class _CommandCenterViewState extends State<CommandCenterView> {
   final ContentService _contentService = getIt<ContentService>();
   final ClipboardService _clipboardService = getIt<ClipboardService>();
   final NavigationService _navigationService = getIt<NavigationService>();
+  final NotificationService _notificationService = getIt<NotificationService>();
 
   // UI state
   bool _isUrl = false;
@@ -65,7 +67,9 @@ class _CommandCenterViewState extends State<CommandCenterView> {
       Command(
         title: 'Notifications',
         icon: CupertinoIcons.bell,
-        action: () {}, // Placeholder for future notification center
+        action: () =>
+            _navigationService.switchToView(AppView.notificationCenter),
+        badgeCount: 0, // Will be updated dynamically
       ),
       Command(
         title: 'Clear',
@@ -76,12 +80,14 @@ class _CommandCenterViewState extends State<CommandCenterView> {
 
     _filteredCommands = _commands;
     _updateHistoryBadge(); // Initial badge update
+    _updateNotificationBadge(); // Initial notification badge update
     _clipboardService.checkClipboard(); // Initial clipboard check on view load
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _focusNode.requestFocus();
     });
 
     _clipboardService.addListener(_onClipboardContentChanged); // Listen for clipboard changes
+    _notificationService.addListener(_updateNotificationBadge); // Listen for notification changes
     _textController.addListener(_onTextChanged);
   }
 
@@ -90,6 +96,7 @@ class _CommandCenterViewState extends State<CommandCenterView> {
     _textController.removeListener(_onTextChanged);
     _textController.dispose();
     _clipboardService.removeListener(_onClipboardContentChanged); // Remove listener
+    _notificationService.removeListener(_updateNotificationBadge);
     _focusNode.dispose();
     super.dispose();
   }
@@ -107,6 +114,24 @@ class _CommandCenterViewState extends State<CommandCenterView> {
           icon: CupertinoIcons.clock,
           action: () => _navigationService.switchToView(AppView.history),
           badgeCount: count,
+        );
+      }
+    });
+  }
+
+  void _updateNotificationBadge() {
+    if (!mounted) return;
+    setState(() {
+      final notificationCommandIndex = _commands.indexWhere(
+        (cmd) => cmd.title == 'Notifications',
+      );
+      if (notificationCommandIndex != -1) {
+        _commands[notificationCommandIndex] = Command(
+          title: 'Notifications',
+          icon: CupertinoIcons.bell,
+          action: () =>
+              _navigationService.switchToView(AppView.notificationCenter),
+          badgeCount: _notificationService.unreadCount,
         );
       }
     });
@@ -181,6 +206,10 @@ class _CommandCenterViewState extends State<CommandCenterView> {
       await _contentService.showNotification(
         'Content Saved',
         'Your content has been successfully saved to history.',
+      );
+      _notificationService.addNotification(
+        'Content Saved',
+        'Added: "${content.length > 50 ? content.substring(0, 50) + '...' : content}"',
       );
       Timer(const Duration(milliseconds: 200), () async {
         await windowManager.hide();

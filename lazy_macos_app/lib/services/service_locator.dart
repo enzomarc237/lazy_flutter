@@ -5,11 +5,13 @@ import 'database_helper.dart';
 import 'gemini_service.dart';
 import 'clipboard_service.dart';
 import 'navigation_service.dart';
+import 'notification_service.dart';
 
 final getIt = GetIt.instance;
 
 void setupServiceLocator() {
   // Register services
+  getIt.registerLazySingleton<NotificationService>(() => NotificationService());
   getIt.registerLazySingleton<ClipboardService>(() => ClipboardService());
   getIt.registerLazySingleton<NavigationService>(() => NavigationService());
   getIt.registerLazySingleton<DatabaseHelper>(() => DatabaseHelper());

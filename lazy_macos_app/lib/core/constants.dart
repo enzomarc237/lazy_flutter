@@ -4,3 +4,4 @@ import 'package:flutter/material.dart';
 const Size kCommandCenterSize = Size(700, 400);
 const Size kHistoryViewSize = Size(800, 600);
 const Size kSettingsViewSize = Size(600, 500);
+const Size kNotificationCenterSize = Size(500, 600);

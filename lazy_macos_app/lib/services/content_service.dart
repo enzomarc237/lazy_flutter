@@ -54,16 +54,6 @@ class ContentService {
   Future<int> updateCaptureSummary(int id, String summary) async {
     return await _dbHelper.updateCaptureSummary(id, summary);
   }
-  
-    Future<void> showNotification(String title, String body) async {
-      LocalNotification notification = LocalNotification(
-        title: title,
-        body: body,
-        silent: true,
-      );
-      notification.show();
-    }
-}
 
   Future<void> showNotification(String title, String body) async {
     LocalNotification notification = LocalNotification(
@@ -73,3 +63,4 @@ class ContentService {
     );
     notification.show();
   }
+}

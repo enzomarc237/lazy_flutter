@@ -179,6 +179,12 @@ class _MyAppState extends State<MyApp> with TrayListener, WindowListener {
       windowManager.setResizable(true);
       windowManager.setSize(kSettingsViewSize);
       windowManager.center();
+    } else if (view == AppView.notificationCenter) {
+      windowManager.show();
+      windowManager.focus();
+      windowManager.setResizable(true);
+      windowManager.setSize(kNotificationCenterSize);
+      windowManager.center();
     }
   }
 
