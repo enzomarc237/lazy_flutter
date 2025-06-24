@@ -225,13 +225,13 @@ class _CommandCenterViewState extends State<CommandCenterView> {
       );
       _notificationService.addNotification(
         'Content Saved',
-        'Added: "${content.length > 50 ? content.substring(0, 50) + '...' : content}"',
+        'Added: "${content.length > 50 ? '${content.substring(0, 50)}...' : content}"',
       );
       Timer(const Duration(milliseconds: 200), () async {
         await windowManager.hide();
       });
     } else {
-      print('Failed to save content');
+      // debugPrint('Failed to save content'); // Use debugPrint for development if needed
     }
   }
 
@@ -340,7 +340,7 @@ class _CommandCenterViewState extends State<CommandCenterView> {
                                     decoration: BoxDecoration(
                                       color: _selectedIndex == index
                                           ? MacosColors.systemBlueColor
-                                                .withOpacity(0.15)
+                                              .withAlpha((0.15 * 255).round())
                                           : Colors.transparent,
                                       borderRadius: BorderRadius.circular(8),
                                       border: _selectedIndex == index

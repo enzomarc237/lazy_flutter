@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'package:local_notifier/local_notifier.dart'; // Added for local notifications
 import '../models/captured_content.dart';
 import 'database_helper.dart';
@@ -16,10 +15,10 @@ class ContentService {
   Future<bool> addContent(CapturedContent content) async {
     try {
       await _dbHelper.insertCapture(content, content.tags);
-      print('Content saved to database: ${jsonEncode(content.toMap())}');
+      // debugPrint('Content saved to database: ${jsonEncode(content.toMap())}');
       return true;
     } catch (e) {
-      print('Error saving content to database: $e');
+      // debugPrint('Error saving content to database: $e');
       return false;
     }
   }
@@ -45,7 +44,7 @@ class ContentService {
       await _dbHelper.deleteCapture(id);
       return true;
     } catch (e) {
-      print('Error deleting content: $e');
+      // debugPrint('Error deleting content: $e');
       return false;
     }
   }

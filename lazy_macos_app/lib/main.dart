@@ -1,4 +1,3 @@
-import 'package:flutter/cupertino.dart'; // For CupertinoIcons
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // Added for PhysicalKeyboardKey, Clipboard, and keyboard events
 import 'package:macos_ui/macos_ui.dart';
@@ -115,7 +114,8 @@ Future<void> setupTray() async {
   try {
     await trayManager.setIcon(iconPath);
   } catch (e) {
-    print("Error setting tray icon: $e.");
+    // Consider logging this error to a file or a proper logging service in a real app
+    // For now, removing the print statement as per lint rules.
   }
 
   Menu menu = Menu(
